@@ -1,0 +1,388 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { Plus, Send, Star } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
+import { TempDot, Badge } from "@/components/ui/badge";
+import { Drawer } from "@/components/ui/drawer";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/lib/store";
+import { relativeDate } from "@/lib/utils";
+import type { Contact } from "@/lib/types";
+
+type Filter = "all" | "hot" | "followup" | "week";
+
+function ContactForm({ onSubmit, onClose, initial }: {
+  onSubmit: (data: Partial<Contact>) => Promise<void>;
+  onClose: () => void;
+  initial?: Partial<Contact>;
+}) {
+  const [d, setD] = useState({
+    firstName:    initial?.firstName ?? "",
+    lastName:     initial?.lastName  ?? "",
+    role:         initial?.role      ?? "",
+    email:        initial?.email     ?? "",
+    linkedinUrl:  initial?.linkedinUrl ?? "",
+    contactType:  initial?.contactType ?? "recruiter",
+    temperature:  initial?.temperature ?? "cold",
+    humanNotes:   initial?.humanNotes  ?? "",
+    nextFollowupDate: initial?.nextFollowupDate ?? "",
+    lastExchangeDate: initial?.lastExchangeDate ?? "",
+    lastExchangeSummary: initial?.lastExchangeSummary ?? "",
+    signalDetected: initial?.signalDetected ?? "",
+    trustLevel:   initial?.trustLevel ?? 3,
+  });
+  const [saving, setSaving] = useState(false);
+
+  function up(key: string, val: unknown) { setD(prev => ({ ...prev, [key]: val })); }
+
+  async function handle(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await onSubmit({
+      ...d,
+      role:        d.role || null,
+      email:       d.email || null,
+      linkedinUrl: d.linkedinUrl || null,
+      humanNotes:  d.humanNotes || null,
+      nextFollowupDate: d.nextFollowupDate || null,
+      lastExchangeDate: d.lastExchangeDate || null,
+      lastExchangeSummary: d.lastExchangeSummary || null,
+      signalDetected: d.signalDetected || null,
+    });
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <form onSubmit={handle}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label className="label">Prénom *</label>
+          <input className="input" value={d.firstName} onChange={e => up("firstName", e.target.value)} required />
+        </div>
+        <div className="field">
+          <label className="label">Nom *</label>
+          <input className="input" value={d.lastName} onChange={e => up("lastName", e.target.value)} required />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label className="label">Rôle</label>
+          <input className="input" value={d.role} onChange={e => up("role", e.target.value)} placeholder="DRH, Recruiter..." />
+        </div>
+        <div className="field">
+          <label className="label">Type</label>
+          <select className="input" value={d.contactType} onChange={e => up("contactType", e.target.value)}>
+            <option value="recruiter">Recruteur</option>
+            <option value="consultant">Consultant</option>
+            <option value="engineer">Ingénieur</option>
+            <option value="acquaintance">Connaissance</option>
+            <option value="referral">Référence</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label className="label">Email</label>
+          <input className="input" type="email" value={d.email} onChange={e => up("email", e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label">LinkedIn URL</label>
+          <input className="input" value={d.linkedinUrl} onChange={e => up("linkedinUrl", e.target.value)} placeholder="https://linkedin.com/in/..." />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label className="label">Température</label>
+          <select className="input" value={d.temperature} onChange={e => up("temperature", e.target.value)}>
+            <option value="cold">Froid</option>
+            <option value="warm">Tiède</option>
+            <option value="hot">Chaud</option>
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Confiance (1-5)</label>
+          <input className="input" type="number" min={1} max={5} value={d.trustLevel} onChange={e => up("trustLevel", parseInt(e.target.value))} />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label className="label">Dernier échange</label>
+          <input className="input" type="date" value={d.lastExchangeDate} onChange={e => up("lastExchangeDate", e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label">Prochaine relance</label>
+          <input className="input" type="date" value={d.nextFollowupDate} onChange={e => up("nextFollowupDate", e.target.value)} />
+        </div>
+      </div>
+      <div className="field">
+        <label className="label">Résumé dernier échange</label>
+        <textarea className="input" value={d.lastExchangeSummary} onChange={e => up("lastExchangeSummary", e.target.value)} rows={2} />
+      </div>
+      <div className="field">
+        <label className="label">Signal détecté</label>
+        <input className="input" value={d.signalDetected} onChange={e => up("signalDetected", e.target.value)} placeholder="Mentionne une ouverture en juin..." />
+      </div>
+      <div className="field">
+        <label className="label">Notes personnelles</label>
+        <textarea className="input" value={d.humanNotes} onChange={e => up("humanNotes", e.target.value)} rows={2} />
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="submit" className="btn btn--primary" disabled={saving}>
+          {saving ? "Enregistrement…" : initial ? "Mettre à jour" : "Créer"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function ContactsPage() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selected, setSelected] = useState<Contact | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
+  const [aiMessages, setAiMessages] = useState<Array<{ tone: string; toneLabel: string; message: string }> | null>(null);
+  const [loadingAI, setLoadingAI] = useState(false);
+  const { showToast } = useToast();
+
+  const load = useCallback(() => {
+    fetch("/api/contacts").then(r => r.json()).then(r => setContacts(r.data ?? []));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleCreate(data: Partial<Contact>) {
+    const resp = await fetch("/api/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    const { data: created } = await resp.json();
+    setContacts(prev => [created, ...prev]);
+    showToast("Contact créé ✓");
+  }
+
+  async function handleUpdate(data: Partial<Contact>) {
+    if (!selected) return;
+    const resp = await fetch(`/api/contacts/${selected.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    const { data: updated } = await resp.json();
+    setContacts(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setSelected(updated);
+    showToast("Contact mis à jour ✓");
+  }
+
+  async function handleDelete() {
+    if (!selected) return;
+    await fetch(`/api/contacts/${selected.id}`, { method: "DELETE" });
+    setContacts(prev => prev.filter(c => c.id !== selected.id));
+    setSelected(null);
+    showToast("Contact supprimé");
+  }
+
+  async function markFollowupDone(contact: Contact) {
+    const nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + 14);
+    const updated = {
+      lastExchangeDate: new Date().toISOString().slice(0, 10),
+      nextFollowupDate: nextDate.toISOString().slice(0, 10),
+    };
+    await fetch(`/api/contacts/${contact.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+    setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, ...updated } : c));
+    if (selected?.id === contact.id) setSelected(prev => prev ? { ...prev, ...updated } : null);
+    showToast(`Relance enregistrée — ${contact.firstName} ✓`);
+  }
+
+  async function loadAIMessages(contact: Contact) {
+    setLoadingAI(true);
+    setAiMessages(null);
+    const resp = await fetch("/api/ai/suggest-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        role: contact.role,
+        company: null,
+        lastExchangeSummary: contact.lastExchangeSummary,
+        signalDetected: contact.signalDetected,
+      }),
+    });
+    const { data } = await resp.json();
+    setAiMessages(data);
+    setLoadingAI(false);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+  const filtered = contacts.filter(c => {
+    if (search && !`${c.firstName} ${c.lastName} ${c.role ?? ""}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filter === "hot") return c.temperature === "hot";
+    if (filter === "followup") return !!c.nextFollowupDate;
+    if (filter === "week") return !!c.nextFollowupDate && c.nextFollowupDate <= nextWeek;
+    return true;
+  });
+
+  const FILTERS: Array<{ id: Filter; label: string }> = [
+    { id: "all",      label: "Tous" },
+    { id: "hot",      label: "Chauds" },
+    { id: "followup", label: "À relancer" },
+    { id: "week",     label: "Cette semaine" },
+  ];
+
+  return (
+    <div className="main__inner">
+      <div className="page-head">
+        <div>
+          <h1 className="page-head__title">Contacts</h1>
+          <p className="page-head__sub">{contacts.length} contacts dans votre réseau</p>
+        </div>
+        <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
+          <Plus size={14} /> Nouveau contact
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="toolbar">
+        <div className="search">
+          <input placeholder="Rechercher un contact…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        {FILTERS.map(f => (
+          <button key={f.id} className={`chip ${filter === f.id ? "chip--active" : ""}`} onClick={() => setFilter(f.id)}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Contact list */}
+      <div className="col gap-2">
+        {filtered.length === 0 && (
+          <div className="muted" style={{ textAlign: "center", padding: "40px 0" }}>
+            {search || filter !== "all" ? "Aucun contact trouvé" : "Ajoutez votre premier contact"}
+          </div>
+        )}
+        {filtered.map(c => (
+          <div key={c.id} className="contact-row" onClick={() => setSelected(c)}>
+            <Avatar firstName={c.firstName} lastName={c.lastName} size="sm" />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                {c.firstName} {c.lastName}
+                <TempDot temp={c.temperature} />
+              </div>
+              <div className="muted tiny">{c.role ?? "—"}</div>
+            </div>
+            <div className="muted tiny">{c.lastExchangeDate ? relativeDate(c.lastExchangeDate) : "Jamais"}</div>
+            <div className="muted tiny">{c.nextFollowupDate ? `Relance le ${c.nextFollowupDate}` : "—"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {c.trustLevel !== null && Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} size={10} fill={i < (c.trustLevel ?? 0) ? "var(--warn)" : "none"} color={i < (c.trustLevel ?? 0) ? "var(--warn)" : "var(--border-strong)"} />
+              ))}
+            </div>
+            <button
+              className="btn btn--sm btn--primary"
+              onClick={e => { e.stopPropagation(); markFollowupDone(c); }}
+            >
+              Relancer
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Detail Drawer */}
+      {selected && (
+        <Drawer
+          open={true}
+          onClose={() => { setSelected(null); setAiMessages(null); }}
+          title={`${selected.firstName} ${selected.lastName}`}
+          subtitle={selected.role ?? undefined}
+          footer={
+            <>
+              <button className="btn" style={{ color: "var(--danger)" }} onClick={handleDelete}>Supprimer</button>
+              <button className="btn btn--full" onClick={() => markFollowupDone(selected)}>
+                <Send size={13} /> Marquer relancé
+              </button>
+            </>
+          }
+        >
+          <div>
+            <div className="row gap-2" style={{ marginBottom: 16 }}>
+              <TempDot temp={selected.temperature} />
+              <Badge tone={selected.temperature === "hot" ? "danger" : selected.temperature === "warm" ? "warn" : "info"}>
+                {selected.temperature === "hot" ? "Chaud" : selected.temperature === "warm" ? "Tiède" : "Froid"}
+              </Badge>
+            </div>
+
+            {selected.lastExchangeSummary && (
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-title">Dernier échange</div>
+                <div className="card" style={{ padding: 12, background: "var(--surface-2)", fontSize: 13 }}>
+                  <div className="muted tiny" style={{ marginBottom: 4 }}>{selected.lastExchangeDate ?? "Date inconnue"}</div>
+                  {selected.lastExchangeSummary}
+                </div>
+              </div>
+            )}
+
+            {selected.signalDetected && (
+              <div className="ai-card" style={{ marginBottom: 16 }}>
+                <div className="ai-card__label">Signal détecté</div>
+                <div className="ai-card__text">{selected.signalDetected}</div>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <div className="section-title">Prochaine relance</div>
+              <div className="row gap-2">
+                <span style={{ fontSize: 13, fontWeight: 600 }}>
+                  {selected.nextFollowupDate ?? "Non définie"}
+                </span>
+              </div>
+            </div>
+
+            {/* AI Suggestions */}
+            <div style={{ marginBottom: 16 }}>
+              <div className="row between" style={{ marginBottom: 8 }}>
+                <div className="section-title">Suggestions de messages</div>
+                <button
+                  className="btn btn--sm"
+                  onClick={() => loadAIMessages(selected)}
+                  disabled={loadingAI}
+                >
+                  {loadingAI ? "Génération…" : "Générer"}
+                </button>
+              </div>
+              {aiMessages && (
+                <div className="col gap-3">
+                  {aiMessages.map((m, i) => (
+                    <div key={i} style={{ background: "var(--primary-soft)", borderRadius: "var(--r-md)", padding: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--primary-ink)", opacity: 0.7, marginBottom: 6, textTransform: "uppercase" }}>
+                        {m.toneLabel}
+                      </div>
+                      <div style={{ fontSize: 12.5, color: "var(--primary-ink)", fontFamily: "var(--f-mono)", lineHeight: 1.5 }}>
+                        {m.message}
+                      </div>
+                      <button
+                        className="btn btn--sm"
+                        style={{ marginTop: 8 }}
+                        onClick={() => { navigator.clipboard.writeText(m.message); showToast("Message copié ✓"); }}
+                      >
+                        Copier
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="divider" />
+
+            <div className="section-title">Modifier</div>
+            <ContactForm initial={selected} onSubmit={handleUpdate} onClose={() => setSelected(null)} />
+          </div>
+        </Drawer>
+      )}
+
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau contact" size="lg">
+        <ContactForm onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+      </Modal>
+    </div>
+  );
+}
