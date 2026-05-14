@@ -1,12 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signUp } from "@/lib/auth-client";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,13 +14,23 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error: err } = await signUp.email({ name, email, password });
-    setLoading(false);
-    if (err) {
-      setError(err.message ?? "Erreur lors de la création du compte.");
-    } else {
-      router.push("/dashboard");
-      router.refresh();
+    try {
+      const resp = await fetch("/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name, email, password }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        setError(data?.message ?? "Erreur lors de la création du compte.");
+        setLoading(false);
+        return;
+      }
+      window.location.href = "/dashboard";
+    } catch {
+      setError("Erreur réseau. Réessayez.");
+      setLoading(false);
     }
   }
 

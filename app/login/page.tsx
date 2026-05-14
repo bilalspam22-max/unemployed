@@ -1,12 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "@/lib/auth-client";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,13 +13,24 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error: err } = await signIn.email({ email, password });
-    setLoading(false);
-    if (err) {
-      setError("Email ou mot de passe incorrect.");
-    } else {
-      router.push("/dashboard");
-      router.refresh();
+    try {
+      const resp = await fetch("/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        setError(data?.message ?? "Email ou mot de passe incorrect.");
+        setLoading(false);
+        return;
+      }
+      // Wait for cookie to be set, then navigate
+      window.location.href = "/dashboard";
+    } catch {
+      setError("Erreur réseau. Réessayez.");
+      setLoading(false);
     }
   }
 
