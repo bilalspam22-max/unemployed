@@ -15,8 +15,18 @@ import {
   LogOut,
 } from "lucide-react";
 import { useSidebar } from "@/lib/store";
-import { signOut, useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { getInitials, avatarColor } from "@/lib/utils";
+import { ThemeToggle } from "./theme-toggle";
+
+async function handleSignOut() {
+  await fetch("/api/auth/sign-out", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).catch(() => {});
+  window.location.href = "/login";
+}
 
 const NAV_ITEMS = [
   { href: "/dashboard",    label: "Tableau de bord", icon: LayoutDashboard },
@@ -105,11 +115,12 @@ export function Sidebar() {
             </div>
           </div>
         )}
+        {!collapsed && <ThemeToggle />}
         {!collapsed && (
           <button
             className="btn btn--ghost btn--icon"
             title="Se déconnecter"
-            onClick={() => signOut({ fetchOptions: { onSuccess: () => { window.location.href = "/login"; } } })}
+            onClick={handleSignOut}
           >
             <LogOut size={14} />
           </button>

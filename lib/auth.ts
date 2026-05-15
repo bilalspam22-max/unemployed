@@ -22,6 +22,15 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24,
   },
   trustedOrigins: [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://192.168.0.111:3000",
     process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
   ],
+  advanced: {
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      secure: false,
+    },
+  },
 });

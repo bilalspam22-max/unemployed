@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -13,23 +14,27 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
     try {
       const resp = await fetch("/api/auth/sign-in/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
+      clearTimeout(t);
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
         setError(data?.message ?? "Email ou mot de passe incorrect.");
         setLoading(false);
         return;
       }
-      // Wait for cookie to be set, then navigate
       window.location.href = "/dashboard";
-    } catch {
-      setError("Erreur réseau. Réessayez.");
+    } catch (e: unknown) {
+      clearTimeout(t);
+      const isAbort = (e as Error)?.name === "AbortError";
+      setError(isAbort ? "Le serveur ne répond pas (timeout)." : "Erreur réseau. Réessayez.");
       setLoading(false);
     }
   }
@@ -42,7 +47,11 @@ export default function LoginPage() {
       alignItems: "center",
       justifyContent: "center",
       padding: 24,
+      position: "relative",
     }}>
+      <div style={{ position: "absolute", top: 16, right: 16 }}>
+        <ThemeToggle />
+      </div>
       <div style={{ width: "100%", maxWidth: 380 }}>
         {/* Brand */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>

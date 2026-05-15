@@ -108,6 +108,107 @@
 }
 
 /* ============================================================
+   DARK MODE — Theme override via [data-theme="dark"] on <html>
+   ============================================================ */
+
+html[data-theme="dark"] {
+  --bg:             #0E1116;
+  --surface:        #161A22;
+  --surface-2:      #1E232D;
+  --surface-3:      #272D38;
+  --border:         #2A303B;
+  --border-strong:  #3A4150;
+  --ink:            #EDEFF3;
+  --ink-2:          #C4C9D2;
+  --ink-3:          #8B92A0;
+  --muted:          #6B7280;
+  --primary:        #5B75EC;
+  --primary-2:      #7691F4;
+  --primary-soft:   rgba(91,117,236,0.16);
+  --primary-ink:    #B7C4F5;
+  --success:        #38B57E;
+  --success-soft:   rgba(56,181,126,0.16);
+  --warn:           #F0A53A;
+  --warn-soft:      rgba(240,165,58,0.16);
+  --danger:         #E86B7A;
+  --danger-soft:    rgba(232,107,122,0.16);
+  --info:           #5BA0DC;
+  --info-soft:      rgba(91,160,220,0.16);
+  --plum:           #A97DD4;
+  --plum-soft:      rgba(169,125,212,0.16);
+  --sh-1:           0 1px 0 rgba(0,0,0,.30), 0 1px 2px rgba(0,0,0,.30);
+  --sh-2:           0 1px 2px rgba(0,0,0,.35), 0 6px 18px -6px rgba(0,0,0,.40);
+  --sh-3:           0 4px 14px -4px rgba(0,0,0,.50), 0 2px 6px rgba(0,0,0,.40);
+  --sh-card-hover:  0 8px 22px -10px rgba(91,117,236,.30), 0 2px 4px rgba(0,0,0,.40);
+}
+
+/* Override @theme inline tokens for dark mode (Tailwind utility classes) */
+html[data-theme="dark"] {
+  --color-bg:             #0E1116;
+  --color-surface:        #161A22;
+  --color-surface-2:      #1E232D;
+  --color-surface-3:      #272D38;
+  --color-border:         #2A303B;
+  --color-border-strong:  #3A4150;
+  --color-ink:            #EDEFF3;
+  --color-ink-2:          #C4C9D2;
+  --color-ink-3:          #8B92A0;
+  --color-muted:          #6B7280;
+  --color-primary:        #5B75EC;
+  --color-primary-2:      #7691F4;
+  --color-primary-soft:   rgba(91,117,236,0.16);
+  --color-primary-ink:    #B7C4F5;
+}
+
+/* Dark-specific tweaks for status soft backgrounds (better contrast) */
+html[data-theme="dark"] .badge--success { color: #6FE0A7; }
+html[data-theme="dark"] .badge--warn    { color: #F5C684; }
+html[data-theme="dark"] .badge--danger  { color: #F2A2AC; }
+html[data-theme="dark"] .badge--info    { color: #8FC7EE; }
+html[data-theme="dark"] .badge--plum    { color: #C9A7E5; }
+html[data-theme="dark"] .badge--primary { color: #B7C4F5; }
+
+html[data-theme="dark"] .cal__ev--warn    { color: #F5C684; }
+html[data-theme="dark"] .cal__ev--success { color: #6FE0A7; }
+
+html[data-theme="dark"] .ai-card {
+  background: rgba(91,117,236,0.10);
+  border-color: rgba(91,117,236,0.25);
+}
+html[data-theme="dark"] .ai-card__label,
+html[data-theme="dark"] .ai-card__text { color: #C7D2F8; }
+
+/* CV card preview adapted for dark */
+html[data-theme="dark"] .cv-card__preview {
+  background: linear-gradient(180deg, #1E232D, #161A22);
+}
+
+/* Brand mark inner adapts */
+html[data-theme="dark"] .brand__mark::after {
+  background: var(--surface);
+}
+
+/* Inputs in dark mode */
+html[data-theme="dark"] .input {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--ink);
+}
+html[data-theme="dark"] .input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(91,117,236,.18);
+}
+
+/* Toast in dark mode */
+html[data-theme="dark"] .toast { background: var(--surface-3); color: var(--ink); }
+
+/* Smooth theme transition */
+html, body { transition: background-color .25s ease, color .25s ease; }
+.card, .kanban-card, .sidebar, .kpi, .sector-card, .cv-card, .contact-row, .input {
+  transition: background-color .25s ease, border-color .25s ease, color .25s ease, box-shadow .15s ease;
+}
+
+/* ============================================================
    Base reset + typography
    ============================================================ */
 
