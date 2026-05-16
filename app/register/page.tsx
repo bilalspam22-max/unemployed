@@ -27,7 +27,19 @@ export default function RegisterPage() {
       clearTimeout(t);
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
-        setError(data?.message ?? "Erreur lors de la création du compte.");
+        const code = data?.code as string | undefined;
+        const map: Record<string, string> = {
+          USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "Cet email est déjà utilisé. Connecte-toi ou utilise un autre email.",
+          USER_ALREADY_EXISTS: "Cet email est déjà utilisé. Connecte-toi ou utilise un autre email.",
+          PASSWORD_TOO_SHORT: "Mot de passe trop court (8 caractères minimum).",
+          PASSWORD_TOO_LONG: "Mot de passe trop long.",
+          INVALID_EMAIL: "Email invalide.",
+        };
+        setError(
+          (code && map[code]) ||
+          data?.message ||
+          `Erreur lors de la création du compte (code ${resp.status}).`
+        );
         setLoading(false);
         return;
       }

@@ -26,7 +26,18 @@ export default function LoginPage() {
       clearTimeout(t);
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
-        setError(data?.message ?? "Email ou mot de passe incorrect.");
+        const code = data?.code as string | undefined;
+        const map: Record<string, string> = {
+          INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe incorrect.",
+          USER_NOT_FOUND: "Aucun compte trouvé avec cet email.",
+          INVALID_PASSWORD: "Mot de passe incorrect.",
+          INVALID_EMAIL: "Email invalide.",
+        };
+        setError(
+          (code && map[code]) ||
+          data?.message ||
+          `Erreur de connexion (code ${resp.status}).`
+        );
         setLoading(false);
         return;
       }
