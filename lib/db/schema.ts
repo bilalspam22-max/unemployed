@@ -14,6 +14,7 @@ export const users = sqliteTable("user", {
   email:         text("email").notNull().unique(),
   emailVerified: integer("emailVerified", { mode: "boolean" }).notNull().default(false),
   image:         text("image"),
+  role:          text("role", { enum: ["user", "admin"] }).notNull().default("user"),
   createdAt:     integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt:     integer("updatedAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });

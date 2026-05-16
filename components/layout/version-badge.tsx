@@ -1,4 +1,4 @@
-export const APP_VERSION = "V1.5";
+export const APP_VERSION = "V1.6";
 
 export function VersionBadge() {
   return (

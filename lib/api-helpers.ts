@@ -15,6 +15,18 @@ export async function requireAuth() {
   return { session, response: null };
 }
 
+export async function requireAdmin() {
+  const session = await getAuthSession();
+  if (!session?.user) {
+    return { session: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+  const role = (session.user as { role?: string }).role;
+  if (role !== "admin") {
+    return { session: null, response: NextResponse.json({ error: "Admin role required" }, { status: 403 }) };
+  }
+  return { session, response: null };
+}
+
 export function ok<T>(data: T, status = 200) {
   return NextResponse.json({ data }, { status });
 }

@@ -107,8 +107,20 @@ export function Sidebar() {
         </div>
         {!collapsed && (
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="semi" style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {user?.name ?? "Utilisateur"}
+            <div className="semi" style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{user?.name ?? "Utilisateur"}</span>
+              {(user as { role?: string })?.role === "admin" && (
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  letterSpacing: "0.08em",
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: "linear-gradient(135deg, var(--primary), var(--plum))",
+                  color: "white",
+                  flexShrink: 0,
+                }}>ADMIN</span>
+              )}
             </div>
             <div className="muted tiny" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {user?.email ?? ""}
