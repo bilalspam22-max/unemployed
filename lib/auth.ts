@@ -31,26 +31,40 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24,
   },
-  // Accept localhost + any LAN IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x) on any port.
-  // Pre-build a generous static list to cover common LAN ranges in dev.
-  trustedOrigins: (() => {
-    const list: string[] = [
+  // Accept localhost, LAN IPs, and production domains dynamically.
+  trustedOrigins: (request?: Request) => {
+    const list: (string | null)[] = [
       "http://localhost:3000",
       "http://127.0.0.1:3000",
+      process.env.BETTER_AUTH_URL ?? null,
+      process.env.NEXT_PUBLIC_APP_URL ?? null,
     ];
-    if (process.env.BETTER_AUTH_URL) list.push(process.env.BETTER_AUTH_URL);
-
-    // Generate common LAN IPs (192.168.0.x and 192.168.1.x) on port 3000 — covers most home/Proxmox setups
-    for (let i = 1; i <= 254; i++) {
-      list.push(`http://192.168.0.${i}:3000`);
-      list.push(`http://192.168.1.${i}:3000`);
+    if (request) {
+      const origin = request.headers.get("origin");
+      if (origin) {
+        // Trust any private-network IP
+        const privateNet = /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+        if (privateNet.test(origin)) {
+          list.push(origin);
+        }
+        // Trust any subdomain of the root domain (e.g. www.unemployedxyz.xyz, unemployed.unemployedxyz.xyz)
+        const appUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
+        if (appUrl) {
+          try {
+            const rootDomain = new URL(appUrl).hostname.split(".").slice(-2).join(".");
+            if (origin.includes(rootDomain)) {
+              list.push(origin);
+            }
+          } catch {}
+        }
+      }
     }
     return list;
-  })(),
+  },
   advanced: {
     defaultCookieAttributes: {
       sameSite: "lax",
-      secure: false,
+      secure: process.env.BETTER_AUTH_URL?.startsWith("https") ?? false,
     },
   },
 });

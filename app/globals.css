@@ -1075,4 +1075,217 @@ select.input { cursor: pointer; }
     align-items: flex-start;
     margin-bottom: 16px;
   }
+  .insights-panel__list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   Insights Panel
+   ============================================================ */
+
+.insights-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.insights-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.insights-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.insights-panel__title svg {
+  color: var(--plum);
+}
+
+.insights-panel__count {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--plum-soft);
+  color: var(--plum);
+  font-weight: 700;
+}
+
+.insights-panel__list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.insight-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 20px;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  animation: insightFadeIn 0.35s ease both;
+  transition: background 0.15s ease;
+}
+
+.insight-card:hover {
+  background: var(--surface-2);
+}
+
+/* Remove bottom border on last row items */
+.insights-panel__list .insight-card:nth-last-child(-n+2) {
+  border-bottom: none;
+}
+
+/* Add vertical separator between columns */
+.insights-panel__list .insight-card:nth-child(odd) {
+  border-right: 1px solid var(--border);
+}
+
+.insight-card__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.insight-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.insight-card__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.3;
+  margin-bottom: 3px;
+}
+
+.insight-card__body {
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.insight-card__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-top: 6px;
+  transition: gap 0.15s ease;
+}
+
+.insight-card__action:hover {
+  gap: 6px;
+}
+
+.insight-card__dismiss {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+
+.insight-card:hover .insight-card__dismiss {
+  opacity: 1;
+}
+
+.insight-card__dismiss:hover {
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+
+/* Empty state */
+.insights-panel__empty {
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.insights-panel__empty-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.insights-panel__empty-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.insights-panel__empty-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Loading skeleton */
+.insights-panel__loading {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insights-panel__skeleton {
+  height: 14px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  border-radius: var(--r-sm);
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  width: 80%;
+}
+
+.insights-panel__skeleton--short {
+  width: 55%;
+}
+
+@keyframes insightFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }

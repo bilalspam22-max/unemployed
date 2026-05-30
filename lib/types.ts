@@ -197,6 +197,25 @@ export interface AIJobExtraction {
   pointsToHighlight: string[];
 }
 
+// ─── Insights engine ─────────────────────────────────────────────────────────
+
+export type InsightCategory = "followup" | "hidden" | "behavior" | "action" | "quality";
+export type InsightSeverity = "info" | "warning" | "action";
+
+export interface Insight {
+  id: string;
+  ruleId: string;
+  category: InsightCategory;
+  severity: InsightSeverity;
+  icon: string;
+  title: string;
+  body: string;
+  actionLabel?: string;
+  actionUrl?: string;
+  score: number;
+  relatedIds?: string[];
+}
+
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
 export interface ApiResponse<T> {

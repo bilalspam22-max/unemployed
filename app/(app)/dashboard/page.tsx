@@ -6,8 +6,9 @@ import { KpiCard } from "@/components/ui/kpi-card";
 import { Donut } from "@/components/ui/donut";
 import { TempDot } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
+import { InsightsPanel } from "@/components/ui/insights-panel";
 import { relativeDate, formatDateShort } from "@/lib/utils";
-import type { Contact } from "@/lib/types";
+import type { Contact, Insight } from "@/lib/types";
 import { useSession } from "@/lib/auth-client";
 
 interface DashboardData {
@@ -66,12 +67,18 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [insights, setInsights] = useState<Insight[]>([]);
+  const [insightsLoading, setInsightsLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/dashboard")
       .then(r => r.json())
       .then(r => { setData(r.data); setLoading(false); })
       .catch(() => setLoading(false));
+    fetch("/api/insights")
+      .then(r => r.json())
+      .then(r => { setInsights(r.data ?? []); setInsightsLoading(false); })
+      .catch(() => setInsightsLoading(false));
   }, []);
 
   const name = session?.user?.name?.split(" ")[0] ?? "Bilal";
@@ -121,6 +128,9 @@ export default function DashboardPage() {
           sparkColor="var(--plum)"
         />
       </div>
+
+      {/* Insights Radar */}
+      <InsightsPanel insights={insights} loading={insightsLoading} />
 
       {/* Mid row */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
