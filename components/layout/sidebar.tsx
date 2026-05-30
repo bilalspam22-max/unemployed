@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Menu,
   LogOut,
+  Shield,
 } from "lucide-react";
 import { useSidebar } from "@/lib/store";
 import { useSession } from "@/lib/auth-client";
@@ -96,6 +97,21 @@ export function Sidebar() {
           );
         })}
       </div>
+
+      {/* Admin section — visible only for admins */}
+      {(user as { role?: string } | undefined)?.role === "admin" && (
+        <>
+          {!collapsed && <div className="nav-section-label">Admin</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Link href="/admin" className={`nav-item ${pathname.startsWith("/admin") ? "nav-item--active" : ""}`}>
+              <span className="nav-item__icon">
+                <Shield size={16} strokeWidth={1.75} />
+              </span>
+              {!collapsed && <span>Administration</span>}
+            </Link>
+          </div>
+        </>
+      )}
 
       {/* User footer */}
       <div className="nav__user">

@@ -168,3 +168,15 @@ export const trainings = sqliteTable("training", {
   roiEstimated:           text("roiEstimated", { enum: ["high", "medium", "low"] }).default("medium"),
   createdAt:              integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
+
+// ─── Admin audit logs ───────────────────────────────────────────────────────
+
+export const adminLogs = sqliteTable("admin_log", {
+  id:          text("id").primaryKey(),
+  userId:      text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  action:      text("action").notNull(),
+  description: text("description"),
+  ipAddress:   text("ipAddress"),
+  metadata:    text("metadata"),
+  createdAt:   integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
