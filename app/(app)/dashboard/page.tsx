@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, TrendingUp } from "lucide-react";
+import { Bell, TrendingUp, Flame } from "lucide-react";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Donut } from "@/components/ui/donut";
 import { TempDot } from "@/components/ui/badge";
@@ -9,8 +9,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { InsightsPanel } from "@/components/ui/insights-panel";
 import { KpiGridSkeleton } from "@/components/ui/skeleton";
 import { relativeDate, formatDateShort } from "@/lib/utils";
+import { getDailyQuote } from "@/lib/quotes";
 import type { Contact, Insight } from "@/lib/types";
 import { useSession } from "@/lib/auth-client";
+
+interface StreakData { current: number; best: number; lastActivity: string | null; }
 
 interface DashboardData {
   applicationsTotal: number;
@@ -70,6 +73,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  const [streak, setStreak] = useState<StreakData | null>(null);
 
   useEffect(() => {
     fetch("/api/dashboard")
@@ -80,10 +84,20 @@ export default function DashboardPage() {
       .then(r => r.json())
       .then(r => { setInsights(r.data ?? []); setInsightsLoading(false); })
       .catch(() => setInsightsLoading(false));
+    fetch("/api/streak")
+      .then(r => r.json())
+      .then(r => setStreak(r.data))
+      .catch(() => {});
   }, []);
 
   const name = session?.user?.name?.split(" ")[0] ?? "Bilal";
   const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const quote = getDailyQuote();
+
+  // Streak tone
+  const streakTone = !streak || streak.current === 0
+    ? null
+    : streak.current >= 8 ? "hot" : streak.current >= 4 ? "mid" : "low";
 
   return (
     <div className="main__inner">
@@ -93,9 +107,20 @@ export default function DashboardPage() {
           <p className="page-head__sub" style={{ margin: "0 0 2px 0" }}>{today}</p>
           <h1 className="page-head__title">Bonjour, {name} 👋</h1>
         </div>
-        <button className="btn">
-          <Bell size={14} /> Rappels
-        </button>
+        <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+          {streak && streak.current > 0 && streakTone && (
+            <span
+              className={`streak-badge streak-badge--${streakTone}`}
+              title={`Meilleur : ${streak.best} jour${streak.best > 1 ? "s" : ""}`}
+            >
+              <Flame size={14} strokeWidth={2.2} />
+              {streak.current} jour{streak.current > 1 ? "s" : ""} d'activité
+            </span>
+          )}
+          <button className="btn">
+            <Bell size={14} /> Rappels
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -138,7 +163,7 @@ export default function DashboardPage() {
       <InsightsPanel insights={insights} loading={insightsLoading} />
 
       {/* Mid row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
+      <div className="dashboard-mid-grid" style={{ marginBottom: 24 }}>
         {/* Donut */}
         <div className="card card__pad-lg">
           <div className="section-title" style={{ marginBottom: 16 }}>Candidatures par secteur</div>
@@ -203,6 +228,12 @@ export default function DashboardPage() {
       {/* Calendrier */}
       <div className="card card__pad-lg" style={{ maxWidth: 560 }}>
         <CalendarMini />
+      </div>
+
+      {/* Citation motivante du jour */}
+      <div className="quote-card" style={{ marginTop: 24 }}>
+        {quote.text}
+        <div className="quote-card__author">— {quote.author}</div>
       </div>
     </div>
   );

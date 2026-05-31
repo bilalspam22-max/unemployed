@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { KanbanSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/lib/store";
+import { celebrate } from "@/lib/confetti";
 import { formatDateShort } from "@/lib/utils";
 import type { Application, Company, Sector, CV } from "@/lib/types";
 
@@ -181,8 +182,13 @@ export default function ApplicationsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleStatusChange(id: string, newStatus: string) {
+    const previous = apps.find(a => a.id === id);
     setApps(prev => prev.map(a => a.id === id ? { ...a, status: newStatus as Application["status"] } : a));
     await fetch(`/api/applications/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) });
+    if (newStatus === "won" && previous?.status !== "won") {
+      celebrate();
+      showToast("🎉 Bravo pour cette victoire !");
+    }
   }
 
   async function handleCreate(data: Partial<Application>) {

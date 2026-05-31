@@ -37,16 +37,19 @@ export function EmptyState({ icon: Icon, title, description, action, tone = "neu
       textAlign: "center",
       gap: 12,
     }}>
-      <div style={{
-        width: 72,
-        height: 72,
-        borderRadius: 20,
-        background: softBg,
-        display: "grid",
-        placeItems: "center",
-        color,
-        boxShadow: "var(--sh-1)",
-      }}>
+      <div
+        className="empty-state__icon-wrap"
+        style={{
+          width: 72,
+          height: 72,
+          borderRadius: 20,
+          background: softBg,
+          display: "grid",
+          placeItems: "center",
+          color,
+          boxShadow: "var(--sh-1)",
+        }}
+      >
         <Icon size={32} strokeWidth={1.5} />
       </div>
       <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>{title}</div>

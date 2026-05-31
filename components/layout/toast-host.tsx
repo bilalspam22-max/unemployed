@@ -1,17 +1,33 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle } from "lucide-react";
 import { useToast } from "@/lib/store";
 
+const AUTO_DISMISS_MS = 2400;
+
 export function ToastHost() {
   const { toasts, dismissToast } = useToast();
+  const [exiting, setExiting] = useState<Set<string>>(new Set());
 
+  // Schedule auto-dismiss for each new toast
   useEffect(() => {
-    if (toasts.length === 0) return;
-    const latest = toasts[toasts.length - 1];
-    const timer = setTimeout(() => dismissToast(latest.id), 1800);
-    return () => clearTimeout(timer);
+    const timers = toasts.map((t) => {
+      // Trigger exit animation before removal
+      const exitTimer = setTimeout(() => {
+        setExiting((prev) => new Set(prev).add(t.id));
+      }, AUTO_DISMISS_MS - 180);
+      const removeTimer = setTimeout(() => {
+        dismissToast(t.id);
+        setExiting((prev) => {
+          const next = new Set(prev);
+          next.delete(t.id);
+          return next;
+        });
+      }, AUTO_DISMISS_MS);
+      return () => { clearTimeout(exitTimer); clearTimeout(removeTimer); };
+    });
+    return () => { timers.forEach((c) => c()); };
   }, [toasts, dismissToast]);
 
   if (toasts.length === 0) return null;
@@ -19,7 +35,12 @@ export function ToastHost() {
   return (
     <div className="toast-host">
       {toasts.map((t) => (
-        <div key={t.id} className="toast" onClick={() => dismissToast(t.id)}>
+        <div
+          key={t.id}
+          className={`toast ${exiting.has(t.id) ? "toast--out" : ""}`}
+          onClick={() => dismissToast(t.id)}
+          role="status"
+        >
           <CheckCircle size={14} />
           {t.message}
         </div>

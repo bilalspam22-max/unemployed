@@ -619,13 +619,7 @@ function AccountsTab() {
 
 function AccountRow({ label, value, actions }: { label: string; value: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "160px 1fr auto",
-      gap: 16,
-      alignItems: "center",
-      padding: "12px 0",
-    }}>
+    <div className="admin-account-row">
       <div className="muted" style={{ fontSize: 13 }}>{label}</div>
       <div style={{ fontSize: 13.5 }}>{value}</div>
       <div>{actions}</div>

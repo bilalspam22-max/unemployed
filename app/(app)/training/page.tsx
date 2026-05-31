@@ -80,7 +80,7 @@ function TrainingForm({ sectors, onSubmit, onClose, initial }: {
         <label className="label">Nom de la formation *</label>
         <input className="input" value={d.name} onChange={e => up("name", e.target.value)} required placeholder="EPLAN, Prince2, SCADA..." />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Secteur</label>
           <select className="input" value={d.sectorId} onChange={e => up("sectorId", e.target.value)}>
@@ -93,7 +93,7 @@ function TrainingForm({ sectors, onSubmit, onClose, initial }: {
           <input className="input" value={d.provider} onChange={e => up("provider", e.target.value)} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Durée (heures)</label>
           <input className="input" type="number" value={d.durationHours} onChange={e => up("durationHours", e.target.value)} />
@@ -103,7 +103,7 @@ function TrainingForm({ sectors, onSubmit, onClose, initial }: {
           <input className="input" type="number" value={d.price} onChange={e => up("price", e.target.value)} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+      <div className="form-grid form-grid--3">
         <div className="field">
           <label className="label">Statut</label>
           <select className="input" value={d.status} onChange={e => up("status", e.target.value)}>
@@ -198,7 +198,7 @@ export default function TrainingPage() {
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div className="sector-grid">
         {trainings.map(t => (
           <TrainingCard key={t.id} training={t} sector={sectorMap[t.sectorId ?? ""]} onEdit={() => setEditing(t)} />
         ))}

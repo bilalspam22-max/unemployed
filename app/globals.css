@@ -1038,6 +1038,21 @@ select.input { cursor: pointer; }
    ============================================================ */
 
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-grid--3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.admin-account-row {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+}
+@media (max-width: 768px) {
+  .admin-account-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 14px 0;
+  }
+}
 .dashboard-mid-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
 .followups-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
 
@@ -1710,7 +1725,8 @@ select.input { cursor: pointer; }
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .form-grid {
+  .form-grid,
+  .form-grid--3 {
     grid-template-columns: 1fr;
   }
   .dashboard-mid-grid {
@@ -1985,4 +2001,311 @@ select.input { cursor: pointer; }
 @keyframes skeletonShimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ============================================================
+   V2.1 — Mobile parfait + Polish premium
+   ============================================================ */
+
+/* ──── Accessibilité : prefers-reduced-motion ──── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ──── Smooth scroll global ──── */
+html { scroll-behavior: smooth; }
+
+/* ──── Tabular numbers globalement ──── */
+body { font-variant-numeric: tabular-nums; }
+
+/* ──── Focus rings cohérents ──── */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.btn:focus-visible,
+.input:focus-visible,
+.nav-item:focus-visible,
+.chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ──── Sticky toolbar au scroll ──── */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+/* ──── Stagger animation cards au chargement ──── */
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.kpi,
+.sector-card,
+.cv-card,
+.contact-row,
+.kanban-card {
+  animation: cardEnter 0.3s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+}
+
+/* KPI row : delay progressif */
+.kpi:nth-child(1) { animation-delay: 0ms; }
+.kpi:nth-child(2) { animation-delay: 60ms; }
+.kpi:nth-child(3) { animation-delay: 120ms; }
+.kpi:nth-child(4) { animation-delay: 180ms; }
+
+/* Sector / CV / Contact rows : cascade */
+.sector-card:nth-child(1), .cv-card:nth-child(1), .contact-row:nth-child(1) { animation-delay: 0ms; }
+.sector-card:nth-child(2), .cv-card:nth-child(2), .contact-row:nth-child(2) { animation-delay: 40ms; }
+.sector-card:nth-child(3), .cv-card:nth-child(3), .contact-row:nth-child(3) { animation-delay: 80ms; }
+.sector-card:nth-child(4), .cv-card:nth-child(4), .contact-row:nth-child(4) { animation-delay: 120ms; }
+.sector-card:nth-child(5), .cv-card:nth-child(5), .contact-row:nth-child(5) { animation-delay: 160ms; }
+.sector-card:nth-child(6), .cv-card:nth-child(6), .contact-row:nth-child(6) { animation-delay: 200ms; }
+.sector-card:nth-child(n+7), .cv-card:nth-child(n+7), .contact-row:nth-child(n+7) { animation-delay: 240ms; }
+
+/* Kanban cards : delay plus court (peuvent être nombreuses) */
+.kanban-card:nth-child(1) { animation-delay: 0ms; }
+.kanban-card:nth-child(2) { animation-delay: 30ms; }
+.kanban-card:nth-child(3) { animation-delay: 60ms; }
+.kanban-card:nth-child(4) { animation-delay: 90ms; }
+.kanban-card:nth-child(n+5) { animation-delay: 120ms; }
+
+/* Cancel animation pendant drag pour ne pas confondre */
+.kanban-card.is-dragging { animation: none; }
+
+/* ──── Empty state icon pop ──── */
+@keyframes iconPop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.empty-state__icon-wrap { animation: iconPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* ──── Toast slide-up + stack ──── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(20px); }
+}
+.toast-host {
+  bottom: 24px;
+}
+.toast {
+  animation: toastIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.toast--out { animation: toastOut 0.18s ease forwards; }
+
+/* ──── Button spinner inline ──── */
+.btn-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: btnSpin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes btnSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ──── Streak badge ──── */
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(224,138,43,0.16), rgba(212,74,92,0.16));
+  color: var(--warn);
+  border: 1px solid rgba(224,138,43,0.25);
+}
+.streak-badge--low { background: rgba(42,157,110,0.14); color: var(--success); border-color: rgba(42,157,110,0.25); }
+.streak-badge--mid { background: rgba(224,138,43,0.16); color: var(--warn); border-color: rgba(224,138,43,0.25); }
+.streak-badge--hot {
+  background: linear-gradient(135deg, rgba(224,138,43,0.20), rgba(212,74,92,0.20));
+  color: var(--danger);
+  border-color: rgba(212,74,92,0.25);
+}
+
+/* ──── Daily quote card ──── */
+.quote-card {
+  padding: 20px 24px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--border);
+  font-style: italic;
+  color: var(--ink-2);
+  line-height: 1.6;
+  font-size: 14px;
+  max-width: 560px;
+  position: relative;
+}
+.quote-card::before {
+  content: "“";
+  position: absolute;
+  top: -8px;
+  left: 16px;
+  font-size: 48px;
+  line-height: 1;
+  font-style: normal;
+  color: var(--primary);
+  opacity: 0.3;
+  font-family: Georgia, serif;
+}
+.quote-card__author {
+  margin-top: 10px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+/* ============================================================
+   MOBILE V2.1 (≤768px) — Optimisations chirurgicales
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Touch targets ≥44px partout */
+  .btn { min-height: 40px; padding: 10px 16px; }
+  .btn--sm { min-height: 36px; padding: 8px 12px; font-size: 12.5px; }
+  .btn--icon { min-width: 40px; min-height: 40px; padding: 10px; }
+  .chip { min-height: 36px; padding: 8px 14px; }
+  .nav-item { min-height: 44px; }
+  .mobile-nav__item { min-height: 48px; }
+  .kanban-move-btn { min-height: 40px; padding: 10px 14px; font-size: 12.5px; }
+  .input { min-height: 44px; }
+  .input[type="checkbox"], .input[type="radio"] { min-height: auto; }
+  textarea.input { min-height: 80px; }
+
+  /* Padding/spacing optimisés */
+  .main__inner { padding: 16px 14px 80px 14px; }
+  .main__inner--wide { padding: 16px 12px 80px 12px; }
+  .card__pad-lg { padding: 16px; }
+  .kpi { padding: 14px 16px; }
+  .page-head { margin-bottom: 16px; flex-direction: column; align-items: flex-start; gap: 12px; }
+  .page-head__title { font-size: 22px; }
+  .page-head__actions { width: 100%; flex-wrap: wrap; }
+  .page-head__actions .btn { flex: 1; min-width: 0; }
+
+  /* Toolbar sticky toujours visible */
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+  .toolbar .search { width: 100%; order: -1; }
+
+  /* Drawer optimisations mobile */
+  .drawer__head { padding: 14px 16px; }
+  .drawer__body { padding: 14px 16px; }
+  .drawer__foot { padding: 12px 16px; }
+
+  /* Toast remontée pour ne pas se masquer derrière le mobile-nav */
+  .toast-host { bottom: calc(84px + env(safe-area-inset-bottom, 0)); }
+}
+
+/* ============================================================
+   TABLETTE (769-1024px) — iPad Pro 11" portrait
+   ============================================================ */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Sidebar plus compacte */
+  .sidebar { width: 200px !important; }
+  .nav-item { font-size: 13px; padding: 8px; }
+  .nav-item__icon { width: 16px; height: 16px; }
+
+  /* Padding réduit */
+  .main__inner { padding: 20px 24px 40px 24px; }
+  .main__inner--wide { padding: 20px 16px 40px 16px; }
+
+  /* KPI grid : 2x2 au lieu de 4x1 */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Dashboard mid grid : 2 colonnes au lieu de 3 */
+  .dashboard-mid-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Kanban : colonnes un peu plus étroites */
+  .kanban-shell { grid-auto-columns: 240px; }
+
+  /* Cards padding réduit */
+  .card__pad-lg { padding: 16px; }
+  .sector-card__body { padding: 14px 16px; }
+
+  /* Sectors/CV grid : 2 colonnes */
+  .sector-grid, .cv-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Pas de mobile-nav, pas de FAB en tablette */
+  .mobile-nav { display: none; }
+  .quick-add__fab { display: none; }
+}
+
+/* ============================================================
+   Modal bottom-sheet sur mobile (override des inline styles)
+   ============================================================ */
+@media (max-width: 768px) {
+  .modal-wrapper {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    border-radius: 20px 20px 0 0 !important;
+    animation: modalSlideUp 0.24s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  .modal-wrapper__handle {
+    display: block !important;
+  }
+}
+@keyframes modalSlideUp {
+  from { transform: translateY(100%); opacity: 0.5; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.modal-wrapper__handle {
+  display: none;
+  width: 36px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 8px auto 0 auto;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Drawer swipe-down support (transform applied via JS)
+   ============================================================ */
+.drawer--swiping { transition: none !important; }
+.drawer__swipe-handle {
+  display: none;
+  width: 36px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 6px auto 4px auto;
+  flex-shrink: 0;
+}
+@media (max-width: 768px) {
+  .drawer__swipe-handle { display: block; }
+  .drawer { border-radius: 20px 20px 0 0; top: 8vh; }
 }

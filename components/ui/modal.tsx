@@ -19,7 +19,13 @@ export function Modal({ open, onClose, title, children, footer, size = "md" }: M
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    // Prevent body scroll when modal is open (mobile)
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = prev;
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -41,6 +47,7 @@ export function Modal({ open, onClose, title, children, footer, size = "md" }: M
       <div
         role="dialog"
         aria-modal
+        className="modal-wrapper"
         style={{
           position: "fixed",
           top: "50%",
@@ -58,22 +65,36 @@ export function Modal({ open, onClose, title, children, footer, size = "md" }: M
           animation: "slideUp .2s ease",
         }}
       >
+        {/* Mobile drag handle (shown via CSS) */}
+        <div className="modal-wrapper__handle" />
+
         <div style={{
-          padding: "18px 22px 14px 22px",
+          padding: "16px 20px 12px 20px",
           borderBottom: "1px solid var(--border)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
+          flexShrink: 0,
         }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h2>
           <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Fermer">
             <X size={16} />
           </button>
         </div>
-        <div style={{ padding: "18px 22px", overflowY: "auto", flex: 1 }}>{children}</div>
+        <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1, WebkitOverflowScrolling: "touch" }}>
+          {children}
+        </div>
         {footer && (
-          <div style={{ padding: "14px 22px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{
+            padding: "12px 20px calc(12px + env(safe-area-inset-bottom, 0px)) 20px",
+            borderTop: "1px solid var(--border)",
+            display: "flex",
+            gap: 8,
+            justifyContent: "flex-end",
+            flexShrink: 0,
+            background: "var(--surface)",
+          }}>
             {footer}
           </div>
         )}
