@@ -7,6 +7,7 @@ import { Donut } from "@/components/ui/donut";
 import { TempDot } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { InsightsPanel } from "@/components/ui/insights-panel";
+import { KpiGridSkeleton } from "@/components/ui/skeleton";
 import { relativeDate, formatDateShort } from "@/lib/utils";
 import type { Contact, Insight } from "@/lib/types";
 import { useSession } from "@/lib/auth-client";
@@ -98,36 +99,40 @@ export default function DashboardPage() {
       </div>
 
       {/* KPIs */}
-      <div className="kpi-grid">
-        <KpiCard
-          label="Candidatures envoyées"
-          value={loading ? "—" : data?.applicationsTotal ?? 0}
-          delta={data?.applicationsDelta}
-          sparkData={[3, 5, 4, 8, 6, 10, data?.applicationsTotal ?? 0]}
-          sparkColor="var(--primary)"
-        />
-        <KpiCard
-          label="Relances ce mois"
-          value={loading ? "—" : data?.followupsThisMonth ?? 0}
-          delta={data?.followupsDelta}
-          sparkData={[1, 3, 2, 4, 3, 6, data?.followupsThisMonth ?? 0]}
-          sparkColor="var(--success)"
-        />
-        <KpiCard
-          label="Entretiens prévus"
-          value={loading ? "—" : data?.interviewsPlanned ?? 0}
-          sparkData={[0, 1, 1, 2, 1, 3, data?.interviewsPlanned ?? 0]}
-          sparkColor="var(--warn)"
-        />
-        <KpiCard
-          label="Taux de réponse"
-          value={loading ? "—" : data?.responseRate ?? 0}
-          unit="%"
-          delta={data?.responseRateDelta}
-          sparkData={[0, 5, 8, 10, 12, 15, data?.responseRate ?? 0]}
-          sparkColor="var(--plum)"
-        />
-      </div>
+      {loading ? (
+        <KpiGridSkeleton count={4} />
+      ) : (
+        <div className="kpi-grid">
+          <KpiCard
+            label="Candidatures envoyées"
+            value={data?.applicationsTotal ?? 0}
+            delta={data?.applicationsDelta}
+            sparkData={[3, 5, 4, 8, 6, 10, data?.applicationsTotal ?? 0]}
+            sparkColor="var(--primary)"
+          />
+          <KpiCard
+            label="Relances ce mois"
+            value={data?.followupsThisMonth ?? 0}
+            delta={data?.followupsDelta}
+            sparkData={[1, 3, 2, 4, 3, 6, data?.followupsThisMonth ?? 0]}
+            sparkColor="var(--success)"
+          />
+          <KpiCard
+            label="Entretiens prévus"
+            value={data?.interviewsPlanned ?? 0}
+            sparkData={[0, 1, 1, 2, 1, 3, data?.interviewsPlanned ?? 0]}
+            sparkColor="var(--warn)"
+          />
+          <KpiCard
+            label="Taux de réponse"
+            value={data?.responseRate ?? 0}
+            unit="%"
+            delta={data?.responseRateDelta}
+            sparkData={[0, 5, 8, 10, 12, 15, data?.responseRate ?? 0]}
+            sparkColor="var(--plum)"
+          />
+        </div>
+      )}
 
       {/* Insights Radar */}
       <InsightsPanel insights={insights} loading={insightsLoading} />

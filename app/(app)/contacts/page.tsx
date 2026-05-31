@@ -6,7 +6,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { TempDot, Badge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/drawer";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/lib/store";
+import { Users as UsersIcon, Search } from "lucide-react";
 import { relativeDate } from "@/lib/utils";
 import type { Contact } from "@/lib/types";
 
@@ -56,7 +60,7 @@ function ContactForm({ onSubmit, onClose, initial }: {
 
   return (
     <form onSubmit={handle}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Prénom *</label>
           <input className="input" value={d.firstName} onChange={e => up("firstName", e.target.value)} required />
@@ -66,7 +70,7 @@ function ContactForm({ onSubmit, onClose, initial }: {
           <input className="input" value={d.lastName} onChange={e => up("lastName", e.target.value)} required />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Rôle</label>
           <input className="input" value={d.role} onChange={e => up("role", e.target.value)} placeholder="DRH, Recruiter..." />
@@ -82,7 +86,7 @@ function ContactForm({ onSubmit, onClose, initial }: {
           </select>
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Email</label>
           <input className="input" type="email" value={d.email} onChange={e => up("email", e.target.value)} />
@@ -92,7 +96,7 @@ function ContactForm({ onSubmit, onClose, initial }: {
           <input className="input" value={d.linkedinUrl} onChange={e => up("linkedinUrl", e.target.value)} placeholder="https://linkedin.com/in/..." />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Température</label>
           <select className="input" value={d.temperature} onChange={e => up("temperature", e.target.value)}>
@@ -106,7 +110,7 @@ function ContactForm({ onSubmit, onClose, initial }: {
           <input className="input" type="number" min={1} max={5} value={d.trustLevel} onChange={e => up("trustLevel", parseInt(e.target.value))} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Dernier échange</label>
           <input className="input" type="date" value={d.lastExchangeDate} onChange={e => up("lastExchangeDate", e.target.value)} />
@@ -146,10 +150,14 @@ export default function ContactsPage() {
   const [search, setSearch] = useState("");
   const [aiMessages, setAiMessages] = useState<Array<{ tone: string; toneLabel: string; message: string }> | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
-  const load = useCallback(() => {
-    fetch("/api/contacts").then(r => r.json()).then(r => setContacts(r.data ?? []));
+  const load = useCallback(async () => {
+    const r = await fetch("/api/contacts").then(r => r.json());
+    setContacts(r.data ?? []);
+    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -175,6 +183,7 @@ export default function ContactsPage() {
     await fetch(`/api/contacts/${selected.id}`, { method: "DELETE" });
     setContacts(prev => prev.filter(c => c.id !== selected.id));
     setSelected(null);
+    setConfirmDelete(false);
     showToast("Contact supprimé");
   }
 
@@ -254,11 +263,27 @@ export default function ContactsPage() {
       </div>
 
       {/* Contact list */}
+      {loading ? (
+        <ListSkeleton rows={5} />
+      ) : (
       <div className="col gap-2">
         {filtered.length === 0 && (
-          <div className="muted" style={{ textAlign: "center", padding: "40px 0" }}>
-            {search || filter !== "all" ? "Aucun contact trouvé" : "Ajoutez votre premier contact"}
-          </div>
+          search || filter !== "all" ? (
+            <EmptyState
+              icon={Search}
+              title="Aucun contact trouvé"
+              description="Aucun contact ne correspond à ta recherche ou tes filtres actuels."
+              tone="neutral"
+            />
+          ) : (
+            <EmptyState
+              icon={UsersIcon}
+              title="Construis ton réseau"
+              description="Ajoute tes premiers contacts — recruteurs, anciens collègues, consultants. Ils sont la clé d'une recherche d'emploi réussie."
+              action={{ label: "Ajouter un contact", onClick: () => setShowCreate(true), icon: Plus }}
+              tone="primary"
+            />
+          )
         )}
         {filtered.map(c => (
           <div key={c.id} className="contact-row" onClick={() => setSelected(c)}>
@@ -286,6 +311,7 @@ export default function ContactsPage() {
           </div>
         ))}
       </div>
+      )}
 
       {/* Detail Drawer */}
       {selected && (
@@ -296,7 +322,7 @@ export default function ContactsPage() {
           subtitle={selected.role ?? undefined}
           footer={
             <>
-              <button className="btn" style={{ color: "var(--danger)" }} onClick={handleDelete}>Supprimer</button>
+              <button className="btn" style={{ color: "var(--danger)" }} onClick={() => setConfirmDelete(true)}>Supprimer</button>
               <button className="btn btn--full" onClick={() => markFollowupDone(selected)}>
                 <Send size={13} /> Marquer relancé
               </button>
@@ -383,6 +409,13 @@ export default function ContactsPage() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau contact" size="lg">
         <ContactForm onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message="Ce contact sera définitivement supprimé. Cette action est irréversible."
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

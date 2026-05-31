@@ -6,7 +6,9 @@ import { KanbanBoard } from "@/components/ui/kanban";
 import { StatusBadge, TempDot, Badge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/drawer";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Avatar } from "@/components/ui/avatar";
+import { KanbanSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/lib/store";
 import type { Company, Sector } from "@/lib/types";
 
@@ -82,7 +84,7 @@ function CompanyForm({ sectors, onSubmit, onClose, initial }: {
           {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Ville</label>
           <input className="input" value={location} onChange={e => setLocation(e.target.value)} placeholder="Paris" />
@@ -116,11 +118,18 @@ export default function CompaniesPage() {
   const [selected, setSelected] = useState<Company | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
-  const loadData = useCallback(() => {
-    fetch("/api/companies").then(r => r.json()).then(r => setCompanies(r.data ?? []));
-    fetch("/api/sectors").then(r => r.json()).then(r => setSectors(r.data ?? []));
+  const loadData = useCallback(async () => {
+    const [cRes, sRes] = await Promise.all([
+      fetch("/api/companies").then(r => r.json()),
+      fetch("/api/sectors").then(r => r.json()),
+    ]);
+    setCompanies(cRes.data ?? []);
+    setSectors(sRes.data ?? []);
+    setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -151,6 +160,7 @@ export default function CompaniesPage() {
     await fetch(`/api/companies/${selected.id}`, { method: "DELETE" });
     setCompanies(prev => prev.filter(c => c.id !== selected.id));
     setSelected(null);
+    setConfirmDelete(false);
     showToast("Entreprise supprimée");
   }
 
@@ -182,16 +192,20 @@ export default function CompaniesPage() {
       </div>
 
       {/* Kanban */}
-      <KanbanBoard
-        items={filtered}
-        columns={COLUMNS}
-        onStatusChange={handleStatusChange}
-        renderCard={(company) => (
-          <div onClick={() => setSelected(company)}>
-            <CompanyCard company={company} />
-          </div>
-        )}
-      />
+      {loading ? (
+        <KanbanSkeleton columns={6} cardsPerCol={2} />
+      ) : (
+        <KanbanBoard
+          items={filtered}
+          columns={COLUMNS}
+          onStatusChange={handleStatusChange}
+          renderCard={(company) => (
+            <div onClick={() => setSelected(company)}>
+              <CompanyCard company={company} />
+            </div>
+          )}
+        />
+      )}
 
       {/* Detail Drawer */}
       {selected && (
@@ -202,7 +216,7 @@ export default function CompaniesPage() {
           subtitle={`${selected.location ?? ""}${selected.location && sectorMap[selected.sectorId ?? ""]?.name ? " · " : ""}${sectorMap[selected.sectorId ?? ""]?.name ?? ""}`}
           footer={
             <>
-              <button className="btn btn--full" style={{ color: "var(--danger)", borderColor: "var(--danger-soft)" }} onClick={handleDelete}>
+              <button className="btn btn--full" style={{ color: "var(--danger)", borderColor: "var(--danger-soft)" }} onClick={() => setConfirmDelete(true)}>
                 Supprimer
               </button>
               <button className="btn btn--primary btn--full" onClick={() => setSelected(null)}>
@@ -257,6 +271,13 @@ export default function CompaniesPage() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouvelle entreprise">
         <CompanyForm sectors={sectors} onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message="Cette entreprise sera définitivement supprimée. Cette action est irréversible."
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

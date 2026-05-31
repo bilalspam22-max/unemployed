@@ -4,16 +4,31 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, ChevronRight } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/lib/store";
-import type { Sector, Company } from "@/lib/types";
+import type { Sector, Company, Application } from "@/lib/types";
 
 const SECTOR_COLORS = [
   "#3D5BE3", "#2A9D6E", "#E08A2B", "#8B5CB8", "#D44A5C", "#3B83C9",
 ];
 
-function SectorCard({ sector, companies, onEdit }: { sector: Sector; companies: Company[]; onEdit: () => void }) {
-  const sectorCompanies   = companies.filter(c => c.sectorId === sector.id);
-  const activeCompanies   = sectorCompanies.filter(c => !["rejected"].includes(c.status));
-  const hotOpportunities  = sectorCompanies.filter(c => c.status === "hot_opportunity");
+function SectorCard({ sector, companies, applications, onEdit }: {
+  sector: Sector;
+  companies: Company[];
+  applications: Application[];
+  onEdit: () => void;
+}) {
+  const sectorCompanies  = companies.filter(c => c.sectorId === sector.id);
+  const activeCompanies  = sectorCompanies.filter(c => c.status !== "rejected");
+  const hotOpportunities = sectorCompanies.filter(c => c.status === "hot_opportunity");
+  const sectorApps       = applications.filter(a => a.sectorId === sector.id);
+
+  // Funnel: sent → in_discussion → interview → won
+  const sent       = sectorApps.length;
+  const responded  = sectorApps.filter(a => ["in_discussion", "interview", "waiting", "won"].includes(a.status)).length;
+  const interviews = sectorApps.filter(a => ["interview", "won"].includes(a.status)).length;
+  const won        = sectorApps.filter(a => a.status === "won").length;
+
+  const responseRate    = sent > 0 ? Math.round((responded  / sent)   * 100) : 0;
+  const interviewRate   = sent > 0 ? Math.round((interviews / sent)   * 100) : 0;
 
   return (
     <div className="sector-card" onClick={onEdit}>
@@ -23,6 +38,7 @@ function SectorCard({ sector, companies, onEdit }: { sector: Sector; companies: 
           <div className="sector-card__title">{sector.name}</div>
           <ChevronRight size={16} color="var(--ink-3)" />
         </div>
+
         <div className="sector-card__stats">
           <div>
             <div className="sector-card__stat-num">{sectorCompanies.length}</div>
@@ -37,7 +53,63 @@ function SectorCard({ sector, companies, onEdit }: { sector: Sector; companies: 
             <div className="sector-card__stat-lbl">Opportunités</div>
           </div>
         </div>
+
+        {/* Mini funnel: only if there are applications */}
+        {sent > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="muted tiny" style={{ marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+              <span>Pipeline ({sent} candidature{sent > 1 ? "s" : ""})</span>
+              <span style={{ color: sector.color, fontWeight: 700 }}>{responseRate}% réponse · {interviewRate}% entretien</span>
+            </div>
+            <FunnelBars sent={sent} responded={responded} interviews={interviews} won={won} color={sector.color} />
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function FunnelBars({ sent, responded, interviews, won, color }: {
+  sent: number; responded: number; interviews: number; won: number; color: string;
+}) {
+  const bars = [
+    { label: "Envoyé",    count: sent,       width: 100 },
+    { label: "En discussion", count: responded,  width: sent > 0 ? (responded / sent) * 100 : 0 },
+    { label: "Entretien", count: interviews, width: sent > 0 ? (interviews / sent) * 100 : 0 },
+    { label: "Gagné",     count: won,        width: sent > 0 ? (won / sent) * 100 : 0 },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      {bars.map((b, i) => (
+        <div key={i} style={{
+          height: 16,
+          background: "var(--surface-2)",
+          borderRadius: 3,
+          position: "relative",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            height: "100%",
+            width: `${Math.max(b.width, b.count > 0 ? 4 : 0)}%`,
+            background: color,
+            opacity: 0.3 + (0.2 * i),
+            transition: "width 0.4s ease",
+          }} />
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 8,
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--ink-2)",
+          }}>
+            {b.label} {b.count > 0 && <span style={{ marginLeft: 6, fontVariantNumeric: "tabular-nums" }}>· {b.count}</span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -99,6 +171,7 @@ function SectorForm({ onSubmit, onClose, initial }: {
 export default function SectorsPage() {
   const [sectors, setSectors]     = useState<Sector[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [editing, setEditing]     = useState<Sector | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const { showToast } = useToast();
@@ -106,6 +179,7 @@ export default function SectorsPage() {
   const load = useCallback(() => {
     fetch("/api/sectors").then(r => r.json()).then(r => setSectors(r.data ?? []));
     fetch("/api/companies").then(r => r.json()).then(r => setCompanies(r.data ?? []));
+    fetch("/api/applications").then(r => r.json()).then(r => setApplications(r.data ?? []));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -148,7 +222,7 @@ export default function SectorsPage() {
 
       <div className="sector-grid">
         {sectors.map(s => (
-          <SectorCard key={s.id} sector={s} companies={companies} onEdit={() => setEditing(s)} />
+          <SectorCard key={s.id} sector={s} companies={companies} applications={applications} onEdit={() => setEditing(s)} />
         ))}
         {sectors.length === 0 && (
           <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px 0" }} className="muted">

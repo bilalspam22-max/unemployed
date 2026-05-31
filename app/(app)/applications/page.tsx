@@ -6,6 +6,8 @@ import { KanbanBoard } from "@/components/ui/kanban";
 import { StatusBadge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/drawer";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { KanbanSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/lib/store";
 import { formatDateShort } from "@/lib/utils";
 import type { Application, Company, Sector, CV } from "@/lib/types";
@@ -85,7 +87,7 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
         <label className="label">Intitulé du poste *</label>
         <input className="input" value={d.jobTitle} onChange={e => up("jobTitle", e.target.value)} required />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Entreprise</label>
           <select className="input" value={d.companyId} onChange={e => up("companyId", e.target.value)}>
@@ -101,7 +103,7 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
           </select>
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">CV utilisé</label>
           <select className="input" value={d.cvUsedId} onChange={e => up("cvUsedId", e.target.value)}>
@@ -114,7 +116,7 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
           <input className="input" type="date" value={d.sentDate} onChange={e => up("sentDate", e.target.value)} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Envoyé via</label>
           <select className="input" value={d.sentVia} onChange={e => up("sentVia", e.target.value)}>
@@ -158,13 +160,22 @@ export default function ApplicationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [aiAction, setAiAction]   = useState<string | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
-  const load = useCallback(() => {
-    fetch("/api/applications").then(r => r.json()).then(r => setApps(r.data ?? []));
-    fetch("/api/companies").then(r => r.json()).then(r => setCompanies(r.data ?? []));
-    fetch("/api/sectors").then(r => r.json()).then(r => setSectors(r.data ?? []));
-    fetch("/api/cvs").then(r => r.json()).then(r => setCvList(r.data ?? []));
+  const load = useCallback(async () => {
+    const [a, c, s, cv] = await Promise.all([
+      fetch("/api/applications").then(r => r.json()),
+      fetch("/api/companies").then(r => r.json()),
+      fetch("/api/sectors").then(r => r.json()),
+      fetch("/api/cvs").then(r => r.json()),
+    ]);
+    setApps(a.data ?? []);
+    setCompanies(c.data ?? []);
+    setSectors(s.data ?? []);
+    setCvList(cv.data ?? []);
+    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -195,6 +206,7 @@ export default function ApplicationsPage() {
     await fetch(`/api/applications/${selected.id}`, { method: "DELETE" });
     setApps(prev => prev.filter(a => a.id !== selected.id));
     setSelected(null);
+    setConfirmDelete(false);
     showToast("Candidature supprimée");
   }
 
@@ -231,16 +243,20 @@ export default function ApplicationsPage() {
         </button>
       </div>
 
-      <KanbanBoard
-        items={apps}
-        columns={COLUMNS}
-        onStatusChange={handleStatusChange}
-        renderCard={(app) => (
-          <div onClick={() => setSelected(app)}>
-            <AppCard app={app} companies={companies} />
-          </div>
-        )}
-      />
+      {loading ? (
+        <KanbanSkeleton columns={8} cardsPerCol={2} />
+      ) : (
+        <KanbanBoard
+          items={apps}
+          columns={COLUMNS}
+          onStatusChange={handleStatusChange}
+          renderCard={(app) => (
+            <div onClick={() => setSelected(app)}>
+              <AppCard app={app} companies={companies} />
+            </div>
+          )}
+        />
+      )}
 
       {/* Detail Drawer */}
       {selected && (
@@ -251,7 +267,7 @@ export default function ApplicationsPage() {
           subtitle={companyMap[selected.companyId ?? ""]?.name ?? "—"}
           footer={
             <>
-              <button className="btn" style={{ color: "var(--danger)" }} onClick={handleDelete}>Supprimer</button>
+              <button className="btn" style={{ color: "var(--danger)" }} onClick={() => setConfirmDelete(true)}>Supprimer</button>
               <button className="btn btn--primary btn--full" onClick={() => setSelected(null)}>Fermer</button>
             </>
           }
@@ -313,6 +329,13 @@ export default function ApplicationsPage() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouvelle candidature" size="lg">
         <AppForm companies={companies} sectors={sectors} cvList={cvList} onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message="Cette candidature sera définitivement supprimée. Cette action est irréversible."
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

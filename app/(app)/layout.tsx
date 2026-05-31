@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { AppProvider } from "@/lib/store";
 import { Sidebar } from "@/components/layout/sidebar";
+import { MobileNav } from "@/components/layout/mobile-nav";
+import { QuickAdd } from "@/components/layout/quick-add";
 import { ToastHost } from "@/components/layout/toast-host";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +21,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <main className="main" style={{ flex: 1, overflowY: "auto" }}>
         {children}
       </main>
+      <MobileNav />
+      <QuickAdd />
       <ToastHost />
     </div>
   );

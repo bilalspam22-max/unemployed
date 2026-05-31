@@ -96,7 +96,7 @@ export default function FollowupsPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 24 }}>
+      <div className="followups-grid">
         {/* Calendrier */}
         <div className="card card__pad-lg">
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>

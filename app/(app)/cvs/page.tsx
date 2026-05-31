@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Download, FileText } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Drawer } from "@/components/ui/drawer";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/lib/store";
 import type { CV, Sector } from "@/lib/types";
 
@@ -81,7 +83,7 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
 
   return (
     <form onSubmit={handle}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Secteur</label>
           <select className="input" value={d.sectorId} onChange={e => up("sectorId", e.target.value)}>
@@ -94,7 +96,7 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
           <input className="input" type="number" min={1} value={d.versionNumber} onChange={e => up("versionNumber", parseInt(e.target.value))} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="form-grid">
         <div className="field">
           <label className="label">Dernière mise à jour</label>
           <input className="input" type="date" value={d.lastUpdated} onChange={e => up("lastUpdated", e.target.value)} />
@@ -127,6 +129,7 @@ export default function CVsPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selected, setSelected] = useState<CV | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const { showToast } = useToast();
 
   const load = useCallback(() => {
@@ -157,6 +160,7 @@ export default function CVsPage() {
     await fetch(`/api/cvs/${selected.id}`, { method: "DELETE" });
     setCvList(prev => prev.filter(c => c.id !== selected.id));
     setSelected(null);
+    setConfirmDelete(false);
     showToast("CV supprimé");
   }
 
@@ -174,17 +178,21 @@ export default function CVsPage() {
         </button>
       </div>
 
-      <div className="cv-grid">
-        {cvList.map(cv => (
-          <CVCard key={cv.id} cv={cv} sector={sectorMap[cv.sectorId ?? ""]} onClick={() => setSelected(cv)} />
-        ))}
-        {cvList.length === 0 && (
-          <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px 0" }} className="muted">
-            <FileText size={32} strokeWidth={1.5} style={{ margin: "0 auto 8px", display: "block" }} />
-            Créez votre premier CV adapté à un secteur
-          </div>
-        )}
-      </div>
+      {cvList.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="Crée ta première version de CV"
+          description="Adapte ton CV à chaque secteur ciblé. Une version pour l'automatisme, une autre pour l'aérospatial — l'IA t'aidera à mettre en valeur les bons mots-clés."
+          action={{ label: "Créer un CV", onClick: () => setShowCreate(true), icon: Plus }}
+          tone="info"
+        />
+      ) : (
+        <div className="cv-grid">
+          {cvList.map(cv => (
+            <CVCard key={cv.id} cv={cv} sector={sectorMap[cv.sectorId ?? ""]} onClick={() => setSelected(cv)} />
+          ))}
+        </div>
+      )}
 
       {selected && (
         <Drawer
@@ -194,7 +202,7 @@ export default function CVsPage() {
           subtitle={`Version ${selected.versionNumber} · ${selected.lastUpdated ?? "—"}`}
           footer={
             <>
-              <button className="btn" style={{ color: "var(--danger)" }} onClick={handleDelete}>Supprimer</button>
+              <button className="btn" style={{ color: "var(--danger)" }} onClick={() => setConfirmDelete(true)}>Supprimer</button>
               {selected.pdfUrl && (
                 <a href={selected.pdfUrl} target="_blank" rel="noopener noreferrer" className="btn">
                   <Download size={13} /> PDF
@@ -232,6 +240,13 @@ export default function CVsPage() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau CV" size="lg">
         <CVForm sectors={sectors} onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message="Ce CV sera définitivement supprimé. Cette action est irréversible."
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
