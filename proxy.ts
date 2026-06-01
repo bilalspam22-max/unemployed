@@ -9,6 +9,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow demo mode through without authentication
+  if (request.nextUrl.searchParams.get("demo") === "true") {
+    return NextResponse.next();
+  }
+
   // Check for Better Auth session cookie
   const sessionToken =
     request.cookies.get("better-auth.session_token") ??

@@ -252,6 +252,24 @@ export interface Insight {
   relatedIds?: string[];
 }
 
+// ─── Calendar ────────────────────────────────────────────────────────────────
+
+export type CalendarEventType =
+  | "followup"
+  | "followup_done"
+  | "meeting"
+  | "application"
+  | "contact_followup";
+
+export interface CalendarEvent {
+  id: string;
+  date: string; // ISO "YYYY-MM-DD"
+  type: CalendarEventType;
+  label: string;
+  status?: string;
+  contactId?: string | null;
+}
+
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
 export interface ApiResponse<T> {

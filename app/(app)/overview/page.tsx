@@ -40,12 +40,16 @@ export default function OverviewPage() {
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/overview").then(r => r.json());
-    setData(r.data ?? { companies: [], contacts: [], applications: [], meetings: [] });
-    setLoading(false);
-    // Expand first 3 companies by default
-    if (r.data?.companies?.length) {
-      setExpandedCompanies(new Set(r.data.companies.slice(0, 3).map((c: Company) => c.id)));
+    try {
+      const r = await fetch("/api/overview").then(r => r.json());
+      setData(r.data ?? { companies: [], contacts: [], applications: [], meetings: [] });
+      if (r.data?.companies?.length) {
+        setExpandedCompanies(new Set(r.data.companies.slice(0, 3).map((c: Company) => c.id)));
+      }
+    } catch {
+      setData({ companies: [], contacts: [], applications: [], meetings: [] });
+    } finally {
+      setLoading(false);
     }
   }, []);
 

@@ -2,15 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { followups, meetings, applications, contacts } from "@/lib/db/schema";
 import { requireAuth, ok } from "@/lib/api-helpers";
-
-export interface CalendarEvent {
-  id: string;
-  date: string;
-  type: "followup" | "followup_done" | "meeting" | "application" | "contact_followup";
-  label: string;
-  status?: string;
-  contactId?: string | null;
-}
+import type { CalendarEvent } from "@/lib/types";
 
 export async function GET() {
   const { session, response } = await requireAuth();

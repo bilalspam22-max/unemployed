@@ -432,17 +432,22 @@ export default function MeetingsPage() {
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
-    const [mRes, coRes, ctRes, appRes] = await Promise.all([
-      fetch("/api/meetings").then(r => r.json()),
-      fetch("/api/companies").then(r => r.json()),
-      fetch("/api/contacts").then(r => r.json()),
-      fetch("/api/applications").then(r => r.json()),
-    ]);
-    setMeetings(mRes.data ?? []);
-    setCompanies(coRes.data ?? []);
-    setContacts(ctRes.data ?? []);
-    setApplications(appRes.data ?? []);
-    setLoading(false);
+    try {
+      const [mRes, coRes, ctRes, appRes] = await Promise.all([
+        fetch("/api/meetings").then(r => r.json()),
+        fetch("/api/companies").then(r => r.json()),
+        fetch("/api/contacts").then(r => r.json()),
+        fetch("/api/applications").then(r => r.json()),
+      ]);
+      setMeetings(mRes.data ?? []);
+      setCompanies(coRes.data ?? []);
+      setContacts(ctRes.data ?? []);
+      setApplications(appRes.data ?? []);
+    } catch {
+      // keep empty arrays — page shows empty state
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

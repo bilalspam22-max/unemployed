@@ -10,8 +10,7 @@ import { InsightsPanel } from "@/components/ui/insights-panel";
 import { KpiGridSkeleton } from "@/components/ui/skeleton";
 import { relativeDate, formatDateShort } from "@/lib/utils";
 import { getDailyQuote } from "@/lib/quotes";
-import type { Contact, Insight } from "@/lib/types";
-import type { CalendarEvent } from "@/app/api/calendar/route";
+import type { Contact, Insight, CalendarEvent } from "@/lib/types";
 import { useSession } from "@/lib/auth-client";
 
 interface StreakData { current: number; best: number; lastActivity: string | null; }
@@ -64,14 +63,13 @@ function CalendarMini() {
 
   const MONTH_NAMES = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
-  // Group events by day for the current view month
+  // Group events by day — parse YYYY-MM-DD without UTC offset drift
   const eventsByDay: Record<number, CalendarEvent[]> = {};
   events.forEach(ev => {
-    const d = new Date(ev.date);
-    if (d.getFullYear() === viewYear && d.getMonth() === viewMonth) {
-      const day = d.getDate();
-      if (!eventsByDay[day]) eventsByDay[day] = [];
-      eventsByDay[day].push(ev);
+    const [evY, evM, evD] = ev.date.split("-").map(Number);
+    if (evY === viewYear && evM === viewMonth + 1) {
+      if (!eventsByDay[evD]) eventsByDay[evD] = [];
+      eventsByDay[evD].push(ev);
     }
   });
 
