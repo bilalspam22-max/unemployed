@@ -144,14 +144,27 @@ export default function OverviewPage() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/overview").then(r => r.json());
-      if (r.data) {
-        setData(r.data);
-        if (r.data.companies?.length) {
-          setExpandedCompanies(new Set(r.data.companies.slice(0, 5).map((c: Company) => c.id)));
+      const resp = await fetch("/api/overview");
+      const r = await resp.json();
+      if (r.data && typeof r.data === "object") {
+        const d: OverviewData = {
+          companies:    Array.isArray(r.data.companies)    ? r.data.companies    : [],
+          contacts:     Array.isArray(r.data.contacts)     ? r.data.contacts     : [],
+          applications: Array.isArray(r.data.applications) ? r.data.applications : [],
+          meetings:     Array.isArray(r.data.meetings)     ? r.data.meetings     : [],
+        };
+        setData(d);
+        if (d.companies.length) {
+          setExpandedCompanies(new Set(d.companies.slice(0, 5).map((c: Company) => c.id)));
         }
+      } else if (r.error) {
+        console.error("[Overview] API error:", r.error);
       }
-    } catch { /* keep empty */ } finally { setLoading(false); }
+    } catch (e) {
+      console.error("[Overview] Fetch error:", e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

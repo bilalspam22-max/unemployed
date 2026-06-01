@@ -12,16 +12,26 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/lib/store";
 import { Users as UsersIcon, Search } from "lucide-react";
 import { relativeDate, formatDate } from "@/lib/utils";
-import type { Contact, Followup } from "@/lib/types";
+import type { Contact, Followup, Sector } from "@/lib/types";
+
+interface ContactFormData extends Omit<Partial<Contact>, "id"> {
+  companyName?: string;
+  companySectorId?: string;
+  companyLocation?: string;
+  companyWebsite?: string;
+}
 
 type Filter = "all" | "hot" | "followup" | "week";
 
 // ─── Contact Form ─────────────────────────────────────────────────────────────
 
-function ContactForm({ onSubmit, onClose, initial }: {
-  onSubmit: (data: Partial<Contact>) => Promise<void>;
+function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initialCompanyName }: {
+  onSubmit: (data: ContactFormData) => Promise<void>;
   onClose: () => void;
   initial?: Partial<Contact>;
+  sectors?: Sector[];
+  companyNames?: string[];
+  initialCompanyName?: string;
 }) {
   const [d, setD] = useState({
     firstName:    initial?.firstName ?? "",
@@ -37,6 +47,11 @@ function ContactForm({ onSubmit, onClose, initial }: {
     lastExchangeSummary: initial?.lastExchangeSummary ?? "",
     signalDetected: initial?.signalDetected ?? "",
     trustLevel:   initial?.trustLevel ?? 3,
+    // Company fields
+    companyName:      initialCompanyName ?? "",
+    companySectorId:  "",
+    companyLocation:  "",
+    companyWebsite:   "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -55,6 +70,10 @@ function ContactForm({ onSubmit, onClose, initial }: {
       lastExchangeDate: d.lastExchangeDate || null,
       lastExchangeSummary: d.lastExchangeSummary || null,
       signalDetected: d.signalDetected || null,
+      companyName:     d.companyName || undefined,
+      companySectorId: d.companySectorId || undefined,
+      companyLocation: d.companyLocation || undefined,
+      companyWebsite:  d.companyWebsite || undefined,
     });
     setSaving(false);
     onClose();
@@ -62,6 +81,7 @@ function ContactForm({ onSubmit, onClose, initial }: {
 
   return (
     <form onSubmit={handle}>
+      {/* ── Identité ── */}
       <div className="form-grid">
         <div className="field">
           <label className="label">Prénom *</label>
@@ -74,11 +94,11 @@ function ContactForm({ onSubmit, onClose, initial }: {
       </div>
       <div className="form-grid">
         <div className="field">
-          <label className="label">Rôle</label>
-          <input className="input" value={d.role} onChange={e => up("role", e.target.value)} placeholder="DRH, Recruiter..." />
+          <label className="label">Rôle / Poste</label>
+          <input className="input" value={d.role} onChange={e => up("role", e.target.value)} placeholder="DRH, Recruiter, CTO..." />
         </div>
         <div className="field">
-          <label className="label">Type</label>
+          <label className="label">Type de contact</label>
           <select className="input" value={d.contactType} onChange={e => up("contactType", e.target.value)}>
             <option value="recruiter">Recruteur</option>
             <option value="consultant">Consultant</option>
@@ -97,6 +117,57 @@ function ContactForm({ onSubmit, onClose, initial }: {
           <label className="label">LinkedIn URL</label>
           <input className="input" value={d.linkedinUrl} onChange={e => up("linkedinUrl", e.target.value)} placeholder="https://linkedin.com/in/..." />
         </div>
+      </div>
+
+      {/* ── Entreprise ── */}
+      <div className="divider" style={{ margin: "16px 0 12px" }} />
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: 12 }}>
+        Entreprise
+      </div>
+      <div className="field">
+        <label className="label">Nom de l'entreprise</label>
+        <input
+          className="input"
+          list="company-names-list"
+          value={d.companyName}
+          onChange={e => up("companyName", e.target.value)}
+          placeholder="Airbus, Capgemini, startup XYZ…"
+        />
+        {companyNames && companyNames.length > 0 && (
+          <datalist id="company-names-list">
+            {companyNames.map(n => <option key={n} value={n} />)}
+          </datalist>
+        )}
+        <span className="muted tiny" style={{ marginTop: 3 }}>
+          {d.companyName && companyNames?.includes(d.companyName)
+            ? "✓ Entreprise existante — sera liée automatiquement"
+            : d.companyName
+              ? "Nouvelle entreprise — sera créée automatiquement"
+              : "Laisse vide si inconnu"}
+        </span>
+      </div>
+      <div className="form-grid">
+        <div className="field">
+          <label className="label">Secteur</label>
+          <select className="input" value={d.companySectorId} onChange={e => up("companySectorId", e.target.value)}>
+            <option value="">— Aucun —</option>
+            {(sectors ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Localisation</label>
+          <input className="input" value={d.companyLocation} onChange={e => up("companyLocation", e.target.value)} placeholder="Paris, Lyon, Remote…" />
+        </div>
+      </div>
+      <div className="field">
+        <label className="label">Site web</label>
+        <input className="input" value={d.companyWebsite} onChange={e => up("companyWebsite", e.target.value)} placeholder="https://…" />
+      </div>
+
+      {/* ── Suivi ── */}
+      <div className="divider" style={{ margin: "16px 0 12px" }} />
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: 12 }}>
+        Suivi
       </div>
       <div className="form-grid">
         <div className="field">
@@ -314,41 +385,56 @@ function ContactHistory({ contactId }: { contactId: string }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selected, setSelected] = useState<Contact | null>(null);
+  const [contacts, setContacts]   = useState<Contact[]>([]);
+  const [sectors, setSectors]     = useState<Sector[]>([]);
+  const [companyMap, setCompanyMap] = useState<Record<string, string>>({});
+  const [selected, setSelected]   = useState<Contact | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
+  const [filter, setFilter]       = useState<Filter>("all");
+  const [search, setSearch]       = useState("");
   const [aiMessages, setAiMessages] = useState<Array<{ tone: string; toneLabel: string; message: string }> | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]     = useState(true);
   const [archiveTarget, setArchiveTarget] = useState<Contact | null>(null);
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/contacts").then(r => r.json());
-    setContacts(r.data ?? []);
-    setLoading(false);
+    try {
+      const [cRes, sRes, coRes] = await Promise.all([
+        fetch("/api/contacts").then(r => r.json()),
+        fetch("/api/sectors").then(r => r.json()),
+        fetch("/api/companies").then(r => r.json()),
+      ]);
+      setContacts(Array.isArray(cRes.data) ? cRes.data : []);
+      setSectors(Array.isArray(sRes.data) ? sRes.data : []);
+      const map: Record<string, string> = {};
+      if (Array.isArray(coRes.data)) {
+        coRes.data.forEach((co: { id: string; name: string }) => { map[co.id] = co.name; });
+      }
+      setCompanyMap(map);
+    } catch { /* keep empty */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleCreate(data: Partial<Contact>) {
+  async function handleCreate(data: ContactFormData) {
     const resp = await fetch("/api/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     const json = await resp.json();
     if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la création", "error"); return; }
     setContacts(prev => [json.data, ...prev]);
+    if (data.companyName) load(); // refresh company map
     showToast("Contact créé ✓");
   }
 
-  async function handleUpdate(data: Partial<Contact>) {
+  async function handleUpdate(data: ContactFormData) {
     if (!selected) return;
     const resp = await fetch(`/api/contacts/${selected.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     const json = await resp.json();
     if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la mise à jour", "error"); return; }
     setContacts(prev => prev.map(c => c.id === json.data.id ? json.data : c));
     setSelected(json.data);
+    if (data.companyName) load(); // refresh company map
     showToast("Contact mis à jour ✓");
   }
 
@@ -494,7 +580,14 @@ export default function ContactsPage() {
                 {c.firstName} {c.lastName}
                 <TempDot temp={c.temperature} />
               </div>
-              <div className="muted tiny">{c.role ?? "—"}</div>
+              <div className="muted tiny">
+                {c.role ?? "—"}
+                {c.companyId && companyMap[c.companyId] && (
+                  <span style={{ marginLeft: 4, color: "var(--primary)", fontWeight: 600 }}>
+                    · {companyMap[c.companyId]}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="muted tiny">{c.lastExchangeDate ? relativeDate(c.lastExchangeDate) : "Jamais"}</div>
             <div className="muted tiny" style={{ color: c.nextFollowupDate && c.nextFollowupDate <= today ? "var(--danger)" : undefined }}>
@@ -626,14 +719,26 @@ export default function ContactsPage() {
             <div className="divider" />
 
             <div className="section-title">Modifier</div>
-            <ContactForm initial={selected} onSubmit={handleUpdate} onClose={() => setSelected(null)} />
+            <ContactForm
+              initial={selected}
+              onSubmit={handleUpdate}
+              onClose={() => setSelected(null)}
+              sectors={sectors}
+              companyNames={Object.values(companyMap)}
+              initialCompanyName={selected.companyId ? (companyMap[selected.companyId] ?? "") : ""}
+            />
           </div>
         </Drawer>
       )}
 
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau contact" size="lg">
-        <ContactForm onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+        <ContactForm
+          onSubmit={handleCreate}
+          onClose={() => setShowCreate(false)}
+          sectors={sectors}
+          companyNames={Object.values(companyMap)}
+        />
       </Modal>
 
       {/* Archive Followup Modal */}

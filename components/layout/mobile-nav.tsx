@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Briefcase,
   KanbanSquare,
   Users,
   MoreHorizontal,
@@ -26,7 +25,6 @@ const MAIN_ITEMS = [
 ];
 
 const MORE_ITEMS = [
-  { href: "/companies",  label: "Entreprises", icon: Briefcase },
   { href: "/meetings",   label: "Réunions",    icon: CalendarCheck },
   { href: "/sectors",    label: "Secteurs",    icon: Layers },
   { href: "/cvs",        label: "CV",          icon: FileText },

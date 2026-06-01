@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Layers,
-  Briefcase,
   Users,
   KanbanSquare,
   FileText,
@@ -36,7 +35,6 @@ const NAV_ITEMS = [
   { href: "/dashboard",    label: "Tableau de bord",  icon: LayoutDashboard },
   { href: "/overview",     label: "Overview",          icon: Network },
   { href: "/sectors",      label: "Secteurs",         icon: Layers },
-  { href: "/companies",    label: "Entreprises",      icon: Briefcase },
   { href: "/contacts",     label: "Contacts",         icon: Users },
   { href: "/applications", label: "Candidatures",     icon: KanbanSquare },
   { href: "/meetings",     label: "Réunions",         icon: CalendarCheck },
