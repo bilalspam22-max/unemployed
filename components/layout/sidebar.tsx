@@ -34,7 +34,7 @@ async function handleSignOut() {
 
 const NAV_ITEMS = [
   { href: "/dashboard",    label: "Tableau de bord",  icon: LayoutDashboard },
-  { href: "/overview",     label: "Vue d'ensemble",   icon: Network },
+  { href: "/overview",     label: "Overview",          icon: Network },
   { href: "/sectors",      label: "Secteurs",         icon: Layers },
   { href: "/companies",    label: "Entreprises",      icon: Briefcase },
   { href: "/contacts",     label: "Contacts",         icon: Users },

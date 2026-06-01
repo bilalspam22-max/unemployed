@@ -20,7 +20,7 @@ import {
 
 const MAIN_ITEMS = [
   { href: "/dashboard",    label: "Accueil",       icon: LayoutDashboard },
-  { href: "/overview",     label: "Vue d'ensemble",icon: Network },
+  { href: "/overview",     label: "Overview",      icon: Network },
   { href: "/applications", label: "Candidatures",  icon: KanbanSquare },
   { href: "/contacts",     label: "Contacts",      icon: Users },
 ];
