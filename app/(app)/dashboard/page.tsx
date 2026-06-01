@@ -8,7 +8,7 @@ import { TempDot } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { InsightsPanel } from "@/components/ui/insights-panel";
 import { KpiGridSkeleton } from "@/components/ui/skeleton";
-import { relativeDate, formatDateShort } from "@/lib/utils";
+import { formatDateShort } from "@/lib/utils";
 import { getDailyQuote } from "@/lib/quotes";
 import type { Contact, Insight, CalendarEvent } from "@/lib/types";
 import { useSession } from "@/lib/auth-client";
@@ -45,7 +45,7 @@ function CalendarMini() {
   useEffect(() => {
     fetch("/api/calendar")
       .then(r => r.json())
-      .then(r => setEvents(r.data ?? []))
+      .then(r => setEvents(Array.isArray(r.data) ? r.data : []))
       .catch(() => {});
   }, []);
 

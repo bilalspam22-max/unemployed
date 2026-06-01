@@ -165,6 +165,80 @@ export default function OverviewPage() {
         </div>
       </div>
 
+      {/* Orphans — shown FIRST so nothing is buried */}
+      {totalOrphans > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="row gap-2 between" style={{ marginBottom: 10 }}>
+            <div className="row gap-2">
+              <Unlink size={15} color="var(--warn)" />
+              <span style={{ fontWeight: 700, fontSize: 14, color: "var(--warn)" }}>
+                À relier — {totalOrphans} élément{totalOrphans > 1 ? "s" : ""} sans entreprise
+              </span>
+            </div>
+            <button
+              onClick={() => setShowOrphans(p => !p)}
+              className="btn btn--sm"
+            >
+              {showOrphans ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showOrphans ? "Réduire" : "Afficher"}
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+            Clique sur &ldquo;Relier&rdquo; pour associer chaque élément à une entreprise et le faire apparaître dans un cluster.
+          </div>
+
+          {showOrphans && (
+            <div className="col gap-2">
+              {filteredOrphanContacts.map(c => (
+                <div key={c.id} className="card" style={{ padding: "10px 14px", borderLeft: "3px solid var(--primary)" }}>
+                  <div className="row between">
+                    <div className="row gap-2">
+                      <Users size={14} color="var(--primary)" />
+                      <TempDot temp={c.temperature} />
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{c.firstName} {c.lastName}</span>
+                      {c.role && <span className="muted tiny">· {c.role}</span>}
+                    </div>
+                    <button className="btn btn--sm btn--primary" onClick={() => { setLinkModal({ type: "contact", entityId: c.id }); setSelectedCompanyId(""); }}>
+                      <Link2 size={12} /> Relier à une entreprise
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {filteredOrphanApplications.map(a => (
+                <div key={a.id} className="card" style={{ padding: "10px 14px", borderLeft: "3px solid var(--success)" }}>
+                  <div className="row between">
+                    <div className="row gap-2">
+                      <KanbanSquare size={14} color="var(--success)" />
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{a.jobTitle}</span>
+                      <Badge tone={statusColor(a.status) as "info" | "success" | "warn" | "danger" | "neutral" | "plum"}>
+                        {statusLabel(a.status)}
+                      </Badge>
+                    </div>
+                    <button className="btn btn--sm btn--primary" onClick={() => { setLinkModal({ type: "application", entityId: a.id }); setSelectedCompanyId(""); }}>
+                      <Link2 size={12} /> Relier à une entreprise
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {filteredOrphanMeetings.map(m => (
+                <div key={m.id} className="card" style={{ padding: "10px 14px", borderLeft: "3px solid var(--plum)" }}>
+                  <div className="row between">
+                    <div className="row gap-2">
+                      <CalendarCheck size={14} color="var(--plum)" />
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{m.title}</span>
+                      <span className="muted tiny">· {formatDate(m.date)}</span>
+                    </div>
+                    <button className="btn btn--sm btn--primary" onClick={() => { setLinkModal({ type: "meeting", entityId: m.id }); setSelectedCompanyId(""); }}>
+                      <Link2 size={12} /> Relier à une entreprise
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Clusters */}
       {clusters.length === 0 && !totalOrphans ? (
         <EmptyState
@@ -175,6 +249,11 @@ export default function OverviewPage() {
         />
       ) : (
         <div className="col gap-3">
+          {clusters.length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
+              {clusters.length} entreprise{clusters.length > 1 ? "s" : ""} — clic pour voir les éléments liés
+            </div>
+          )}
           {clusters.map(({ company, contacts: cc, applications: ca, meetings: cm }) => {
             const isExpanded = expandedCompanies.has(company.id);
             const itemCount = cc.length + ca.length + cm.length;
@@ -303,78 +382,6 @@ export default function OverviewPage() {
             );
           })}
 
-          {/* Orphans section */}
-          {totalOrphans > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <button
-                onClick={() => setShowOrphans(p => !p)}
-                className="row gap-2"
-                style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  color: "var(--warn)", fontWeight: 700, fontSize: 14, padding: "8px 0",
-                }}
-              >
-                <Unlink size={15} />
-                Éléments non reliés ({totalOrphans})
-                {showOrphans ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-
-              {showOrphans && (
-                <div className="col gap-2" style={{ marginTop: 4 }}>
-                  {/* Orphan contacts */}
-                  {filteredOrphanContacts.map(c => (
-                    <div key={c.id} className="card" style={{ padding: "10px 14px" }}>
-                      <div className="row between">
-                        <div className="row gap-2">
-                          <Users size={14} color="var(--primary)" />
-                          <TempDot temp={c.temperature} />
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{c.firstName} {c.lastName}</span>
-                          {c.role && <span className="muted tiny">· {c.role}</span>}
-                        </div>
-                        <button className="btn btn--sm" onClick={() => { setLinkModal({ type: "contact", entityId: c.id }); setSelectedCompanyId(""); }}>
-                          <Link2 size={12} /> Relier
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Orphan applications */}
-                  {filteredOrphanApplications.map(a => (
-                    <div key={a.id} className="card" style={{ padding: "10px 14px" }}>
-                      <div className="row between">
-                        <div className="row gap-2">
-                          <KanbanSquare size={14} color="var(--success)" />
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{a.jobTitle}</span>
-                          <Badge tone={statusColor(a.status) as "info" | "success" | "warn" | "danger" | "neutral" | "plum"}>
-                            {statusLabel(a.status)}
-                          </Badge>
-                        </div>
-                        <button className="btn btn--sm" onClick={() => { setLinkModal({ type: "application", entityId: a.id }); setSelectedCompanyId(""); }}>
-                          <Link2 size={12} /> Relier
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Orphan meetings */}
-                  {filteredOrphanMeetings.map(m => (
-                    <div key={m.id} className="card" style={{ padding: "10px 14px" }}>
-                      <div className="row between">
-                        <div className="row gap-2">
-                          <CalendarCheck size={14} color="var(--plum)" />
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{m.title}</span>
-                          <span className="muted tiny">· {formatDate(m.date)}</span>
-                        </div>
-                        <button className="btn btn--sm" onClick={() => { setLinkModal({ type: "meeting", entityId: m.id }); setSelectedCompanyId(""); }}>
-                          <Link2 size={12} /> Relier
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 

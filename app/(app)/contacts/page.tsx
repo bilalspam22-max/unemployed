@@ -235,9 +235,11 @@ function ContactHistory({ contactId }: { contactId: string }) {
     fetch(`/api/followups?contactId=${contactId}`)
       .then(r => r.json())
       .then(r => {
-        setHistory((r.data ?? []).filter((f: Followup) => f.status === "completed"));
-        setLoading(false);
-      });
+        const rows = Array.isArray(r.data) ? r.data : [];
+        setHistory(rows.filter((f: Followup) => f.status === "completed"));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [contactId]);
 
   if (loading) return <div className="muted tiny" style={{ padding: "8px 0" }}>Chargement…</div>;

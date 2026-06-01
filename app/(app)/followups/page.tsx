@@ -86,9 +86,9 @@ export default function FollowupsPage() {
   const { showToast } = useToast();
 
   const load = useCallback(() => {
-    fetch("/api/followups").then(r => r.json()).then(r => setFollowups(r.data ?? [])).catch(() => {});
-    fetch("/api/contacts").then(r => r.json()).then(r => setContacts(r.data ?? [])).catch(() => {});
-    fetch("/api/calendar").then(r => r.json()).then(r => setCalEvents(r.data ?? [])).catch(() => {});
+    fetch("/api/followups").then(r => r.json()).then(r => setFollowups(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    fetch("/api/contacts").then(r => r.json()).then(r => setContacts(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    fetch("/api/calendar").then(r => r.json()).then(r => setCalEvents(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);

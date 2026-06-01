@@ -17,7 +17,7 @@ export function useIsDemo() {
 
 // ─── Route matcher ──────────────────────────────────────────────────────────
 
-function matchDemoRoute(url: string): { data: unknown } | null {
+function matchDemoRoute(url: string, method = "GET"): { data: unknown } | null {
   const path = new URL(url, "http://localhost").pathname;
 
   // Dashboard
@@ -91,14 +91,41 @@ function matchDemoRoute(url: string): { data: unknown } | null {
     }};
   }
 
+  // Calendar — unified events
+  if (path === "/api/calendar") {
+    const events = [
+      ...DEMO_FOLLOWUPS.map(f => ({
+        id: f.id, date: f.scheduledDate,
+        type: f.status === "completed" ? "followup_done" : "followup",
+        label: "Relance", status: f.status, contactId: f.contactId,
+      })),
+      ...DEMO_CONTACTS.filter(c => c.nextFollowupDate).map(c => ({
+        id: `cfup-${c.id}`, date: c.nextFollowupDate!,
+        type: "contact_followup", label: `${c.firstName} ${c.lastName}`, contactId: c.id,
+      })),
+      ...DEMO_MEETINGS.map(m => ({
+        id: m.id, date: m.date, type: "meeting", label: m.title,
+      })),
+      ...DEMO_APPLICATIONS.filter(a => a.sentDate).map(a => ({
+        id: a.id, date: a.sentDate!, type: "application", label: a.jobTitle, status: a.status,
+      })),
+    ];
+    return { data: events };
+  }
+
   // Auth session
   if (path === "/api/auth/get-session") {
     return { data: null }; // We handle session via useSession override
   }
 
-  // For any PUT/POST/DELETE in demo — just return success
-  if (path.startsWith("/api/")) {
+  // Write operations (POST/PUT/DELETE) — return success stub
+  if (path.startsWith("/api/") && method !== "GET") {
     return { data: { success: true, message: "Mode démo : les modifications ne sont pas sauvegardées." } };
+  }
+
+  // Unknown GET route — return empty array to avoid crashes on .forEach/.filter
+  if (path.startsWith("/api/")) {
+    return { data: [] };
   }
 
   return null;
@@ -116,11 +143,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
       // Only intercept API calls
       if (url.startsWith("/api/") || url.includes("/api/")) {
-        const result = matchDemoRoute(url);
+        const reqMethod = init?.method?.toUpperCase() ?? "GET";
+        const result = matchDemoRoute(url, reqMethod);
         if (result) {
-          // For write operations, show a toast-like delay then return the data
-          const method = init?.method?.toUpperCase() ?? "GET";
-          if (method !== "GET") {
+          if (reqMethod !== "GET") {
             await new Promise(r => setTimeout(r, 300)); // Simulate network delay
           }
           return new Response(JSON.stringify(result), {
