@@ -931,6 +931,11 @@ input, textarea, select { font: inherit; color: inherit; }
   box-shadow: var(--sh-3);
   animation: fadeIn .2s ease;
   white-space: nowrap;
+  pointer-events: all;
+  cursor: pointer;
+}
+.toast--error {
+  background: var(--danger);
 }
 
 /* ============================================================

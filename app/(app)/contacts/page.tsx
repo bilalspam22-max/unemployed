@@ -336,23 +336,26 @@ export default function ContactsPage() {
 
   async function handleCreate(data: Partial<Contact>) {
     const resp = await fetch("/api/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: created } = await resp.json();
-    setContacts(prev => [created, ...prev]);
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la création", "error"); return; }
+    setContacts(prev => [json.data, ...prev]);
     showToast("Contact créé ✓");
   }
 
   async function handleUpdate(data: Partial<Contact>) {
     if (!selected) return;
     const resp = await fetch(`/api/contacts/${selected.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: updated } = await resp.json();
-    setContacts(prev => prev.map(c => c.id === updated.id ? updated : c));
-    setSelected(updated);
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la mise à jour", "error"); return; }
+    setContacts(prev => prev.map(c => c.id === json.data.id ? json.data : c));
+    setSelected(json.data);
     showToast("Contact mis à jour ✓");
   }
 
   async function handleDelete() {
     if (!selected) return;
-    await fetch(`/api/contacts/${selected.id}`, { method: "DELETE" });
+    const resp = await fetch(`/api/contacts/${selected.id}`, { method: "DELETE" });
+    if (!resp.ok) { showToast("Erreur lors de la suppression", "error"); return; }
     setContacts(prev => prev.filter(c => c.id !== selected.id));
     setSelected(null);
     setConfirmDelete(false);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/lib/store";
 
 const AUTO_DISMISS_MS = 2400;
@@ -37,11 +37,11 @@ export function ToastHost() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`toast ${exiting.has(t.id) ? "toast--out" : ""}`}
+          className={`toast ${t.tone === "error" ? "toast--error" : ""} ${exiting.has(t.id) ? "toast--out" : ""}`}
           onClick={() => dismissToast(t.id)}
-          role="status"
+          role={t.tone === "error" ? "alert" : "status"}
         >
-          <CheckCircle size={14} />
+          {t.tone === "error" ? <XCircle size={14} /> : <CheckCircle size={14} />}
           {t.message}
         </div>
       ))}

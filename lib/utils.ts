@@ -51,6 +51,20 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
+// Safe fetch wrapper — returns { data, error }
+export async function apiFetch<T>(url: string, init?: RequestInit): Promise<{ data: T | null; error: string | null }> {
+  try {
+    const resp = await fetch(url, init);
+    const json = await resp.json();
+    if (!resp.ok || json.error) {
+      return { data: null, error: json.error ?? `Erreur ${resp.status}` };
+    }
+    return { data: json.data as T, error: null };
+  } catch (e) {
+    return { data: null, error: e instanceof Error ? e.message : "Erreur réseau" };
+  }
+}
+
 export function parseJsonArray(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try { return JSON.parse(raw); } catch { return []; }

@@ -12,6 +12,7 @@ interface DrawerState {
 interface Toast {
   id: string;
   message: string;
+  tone?: "success" | "error";
 }
 
 interface AppState {
@@ -31,7 +32,7 @@ const initialState: AppState = {
 type AppAction =
   | { type: "OPEN_DRAWER"; payload: DrawerState }
   | { type: "CLOSE_DRAWER" }
-  | { type: "SHOW_TOAST"; payload: { message: string } }
+  | { type: "SHOW_TOAST"; payload: { message: string; tone?: "success" | "error" } }
   | { type: "DISMISS_TOAST"; payload: { id: string } }
   | { type: "TOGGLE_SIDEBAR" }
   | { type: "SET_SIDEBAR"; payload: { collapsed: boolean } };
@@ -44,7 +45,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, drawer: { type: null, id: null } };
     case "SHOW_TOAST": {
       const id = crypto.randomUUID();
-      return { ...state, toasts: [...state.toasts, { id, message: action.payload.message }] };
+      return { ...state, toasts: [...state.toasts, { id, message: action.payload.message, tone: action.payload.tone }] };
     }
     case "DISMISS_TOAST":
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.payload.id) };
@@ -90,7 +91,7 @@ export function useToast() {
   const { state, dispatch } = useAppStore();
   return {
     toasts: state.toasts,
-    showToast: (message: string) => dispatch({ type: "SHOW_TOAST", payload: { message } }),
+    showToast: (message: string, tone?: "success" | "error") => dispatch({ type: "SHOW_TOAST", payload: { message, tone } }),
     dismissToast: (id: string) => dispatch({ type: "DISMISS_TOAST", payload: { id } }),
   };
 }

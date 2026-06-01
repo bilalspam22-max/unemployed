@@ -177,32 +177,35 @@ export default function SectorsPage() {
   const { showToast } = useToast();
 
   const load = useCallback(() => {
-    fetch("/api/sectors").then(r => r.json()).then(r => setSectors(r.data ?? []));
-    fetch("/api/companies").then(r => r.json()).then(r => setCompanies(r.data ?? []));
-    fetch("/api/applications").then(r => r.json()).then(r => setApplications(r.data ?? []));
+    fetch("/api/sectors").then(r => r.json()).then(r => setSectors(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    fetch("/api/companies").then(r => r.json()).then(r => setCompanies(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    fetch("/api/applications").then(r => r.json()).then(r => setApplications(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   async function handleCreate(data: Partial<Sector>) {
     const resp = await fetch("/api/sectors", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: created } = await resp.json();
-    setSectors(prev => [...prev, created]);
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la création", "error"); return; }
+    setSectors(prev => [...prev, json.data]);
     showToast("Secteur créé ✓");
   }
 
   async function handleUpdate(data: Partial<Sector>) {
     if (!editing) return;
     const resp = await fetch(`/api/sectors/${editing.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: updated } = await resp.json();
-    setSectors(prev => prev.map(s => s.id === updated.id ? updated : s));
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la mise à jour", "error"); return; }
+    setSectors(prev => prev.map(s => s.id === json.data.id ? json.data : s));
     setEditing(null);
     showToast("Secteur mis à jour ✓");
   }
 
   async function handleDelete() {
     if (!editing) return;
-    await fetch(`/api/sectors/${editing.id}`, { method: "DELETE" });
+    const resp = await fetch(`/api/sectors/${editing.id}`, { method: "DELETE" });
+    if (!resp.ok) { showToast("Erreur lors de la suppression", "error"); return; }
     setSectors(prev => prev.filter(s => s.id !== editing.id));
     setEditing(null);
     showToast("Secteur supprimé");

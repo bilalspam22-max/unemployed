@@ -2,13 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  Network, Search, Building2, Users, KanbanSquare, CalendarCheck,
-  Link2, Unlink, ChevronDown, ChevronUp, Plus, ExternalLink,
+  Network, Building2, Users, KanbanSquare, CalendarCheck,
+  Link2, Unlink, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Badge, TempDot } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { ListSkeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/lib/store";
 import { formatDate, statusLabel, statusColor } from "@/lib/utils";
 import type { Company, Contact, Application, Meeting } from "@/lib/types";
@@ -241,12 +240,29 @@ export default function OverviewPage() {
 
       {/* Clusters */}
       {clusters.length === 0 && !totalOrphans ? (
-        <EmptyState
-          icon={Network}
-          title="Aucune donnée à interconnecter"
-          description="Ajoute des entreprises, contacts et candidatures pour voir leurs connexions ici."
-          tone="primary"
-        />
+        <div>
+          <div className="card card__pad-lg" style={{ textAlign: "center", maxWidth: 560, margin: "0 auto" }}>
+            <Network size={32} color="var(--primary)" style={{ margin: "0 auto 12px" }} />
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Prêt à construire ton réseau ?</div>
+            <div className="muted" style={{ fontSize: 13, marginBottom: 20 }}>
+              Commence par créer tes secteurs, entreprises, contacts et candidatures. Ils apparaîtront ici liés ensemble.
+            </div>
+            <div className="row gap-2" style={{ justifyContent: "center", flexWrap: "wrap" }}>
+              <a href="/sectors" className="btn btn--primary" style={{ textDecoration: "none" }}>
+                <Building2 size={13} /> Secteurs
+              </a>
+              <a href="/companies" className="btn btn--primary" style={{ textDecoration: "none" }}>
+                <Building2 size={13} /> Entreprises
+              </a>
+              <a href="/contacts" className="btn btn--primary" style={{ textDecoration: "none" }}>
+                <Users size={13} /> Contacts
+              </a>
+              <a href="/applications" className="btn btn--primary" style={{ textDecoration: "none" }}>
+                <KanbanSquare size={13} /> Candidatures
+              </a>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="col gap-3">
           {clusters.length > 0 && (

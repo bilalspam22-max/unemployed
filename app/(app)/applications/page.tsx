@@ -166,17 +166,18 @@ export default function ApplicationsPage() {
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
-    const [a, c, s, cv] = await Promise.all([
-      fetch("/api/applications").then(r => r.json()),
-      fetch("/api/companies").then(r => r.json()),
-      fetch("/api/sectors").then(r => r.json()),
-      fetch("/api/cvs").then(r => r.json()),
-    ]);
-    setApps(a.data ?? []);
-    setCompanies(c.data ?? []);
-    setSectors(s.data ?? []);
-    setCvList(cv.data ?? []);
-    setLoading(false);
+    try {
+      const [a, c, s, cv] = await Promise.all([
+        fetch("/api/applications").then(r => r.json()),
+        fetch("/api/companies").then(r => r.json()),
+        fetch("/api/sectors").then(r => r.json()),
+        fetch("/api/cvs").then(r => r.json()),
+      ]);
+      setApps(Array.isArray(a.data) ? a.data : []);
+      setCompanies(Array.isArray(c.data) ? c.data : []);
+      setSectors(Array.isArray(s.data) ? s.data : []);
+      setCvList(Array.isArray(cv.data) ? cv.data : []);
+    } catch { /* keep empty */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -193,23 +194,26 @@ export default function ApplicationsPage() {
 
   async function handleCreate(data: Partial<Application>) {
     const resp = await fetch("/api/applications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: created } = await resp.json();
-    setApps(prev => [created, ...prev]);
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la création", "error"); return; }
+    setApps(prev => [json.data, ...prev]);
     showToast("Candidature créée ✓");
   }
 
   async function handleUpdate(data: Partial<Application>) {
     if (!selected) return;
     const resp = await fetch(`/api/applications/${selected.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: updated } = await resp.json();
-    setApps(prev => prev.map(a => a.id === updated.id ? updated : a));
-    setSelected(updated);
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la mise à jour", "error"); return; }
+    setApps(prev => prev.map(a => a.id === json.data.id ? json.data : a));
+    setSelected(json.data);
     showToast("Candidature mise à jour ✓");
   }
 
   async function handleDelete() {
     if (!selected) return;
-    await fetch(`/api/applications/${selected.id}`, { method: "DELETE" });
+    const resp = await fetch(`/api/applications/${selected.id}`, { method: "DELETE" });
+    if (!resp.ok) { showToast("Erreur lors de la suppression", "error"); return; }
     setApps(prev => prev.filter(a => a.id !== selected.id));
     setSelected(null);
     setConfirmDelete(false);
