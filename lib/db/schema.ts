@@ -169,6 +169,28 @@ export const trainings = sqliteTable("training", {
   createdAt:              integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
+// ─── Meetings / Notes de réunion ────────────────────────────────────────────
+
+export const meetings = sqliteTable("meeting", {
+  id:              text("id").primaryKey(),
+  userId:          text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyId:       text("companyId").references(() => companies.id, { onDelete: "set null" }),
+  contactId:       text("contactId").references(() => contacts.id, { onDelete: "set null" }),
+  applicationId:   text("applicationId").references(() => applications.id, { onDelete: "set null" }),
+  title:           text("title").notNull(),
+  date:            text("date").notNull(), // ISO date string
+  companyInfo:     text("companyInfo"),     // What the interviewer said about the company
+  myPitch:         text("myPitch"),         // The presentation speech given
+  jobMentioned:    text("jobMentioned"),    // Job offers mentioned during the meeting
+  sentiment:       text("sentiment", { enum: ["positive", "neutral", "negative"] }).default("neutral"),
+  sentimentNotes:  text("sentimentNotes"),
+  questionsData:   text("questionsData").default("[]"), // JSON: [{question, asked, answer}]
+  nextSteps:       text("nextSteps"),
+  notes:           text("notes"),
+  createdAt:       integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt:       integer("updatedAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
 // ─── Admin audit logs ───────────────────────────────────────────────────────
 
 export const adminLogs = sqliteTable("admin_log", {
@@ -180,3 +202,4 @@ export const adminLogs = sqliteTable("admin_log", {
   metadata:    text("metadata"),
   createdAt:   integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
+

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, TrendingUp, Flame } from "lucide-react";
+import { Bell, TrendingUp, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Donut } from "@/components/ui/donut";
 import { TempDot } from "@/components/ui/badge";
@@ -30,11 +30,13 @@ interface DashboardData {
 
 function CalendarMini() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = now.getDate();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth());
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth();
+  const today = isCurrentMonth ? now.getDate() : -1;
 
   const DAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
   const adjustedFirst = (firstDay + 6) % 7; // Monday-first
@@ -45,14 +47,36 @@ function CalendarMini() {
 
   const MONTH_NAMES = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  }
+  function goToday() { setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); }
+
   return (
     <div>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>
-        {MONTH_NAMES[month]} {year}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <button className="btn btn--ghost btn--icon" onClick={prevMonth} title="Mois précédent">
+          <ChevronLeft size={16} />
+        </button>
+        <button
+          onClick={goToday}
+          style={{ fontWeight: 700, fontSize: 14, background: "none", border: "none", cursor: "pointer", color: "var(--ink)", padding: "2px 8px", borderRadius: "var(--r-sm)" }}
+          title="Revenir au mois actuel"
+        >
+          {MONTH_NAMES[viewMonth]} {viewYear}
+        </button>
+        <button className="btn btn--ghost btn--icon" onClick={nextMonth} title="Mois suivant">
+          <ChevronRight size={16} />
+        </button>
       </div>
       <div className="cal">
-        {DAY_LABELS.map(d => (
-          <div key={d} className="cal__head">{d}</div>
+        {DAY_LABELS.map((d, i) => (
+          <div key={`h-${i}`} className="cal__head">{d}</div>
         ))}
         {cells.map((day, i) => (
           <div

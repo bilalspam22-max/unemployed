@@ -141,6 +141,57 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
+
+        {/* Demo CTA */}
+        <div style={{ marginTop: 16 }}>
+          <button
+            onClick={() => { window.location.href = "/dashboard?demo=true"; }}
+            style={{
+              width: "100%",
+              padding: "14px 16px",
+              borderRadius: "var(--r-lg, 12px)",
+              border: "2px solid transparent",
+              background: "linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(135deg, var(--primary), #8B5CB8, #E08A2B) border-box",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              transition: "transform .15s ease, box-shadow .15s ease",
+              position: "relative",
+              overflow: "hidden",
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 20px rgba(61,91,227,.2)";
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+            }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: "linear-gradient(135deg, var(--primary), #8B5CB8)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 18,
+            }}>
+              🔍
+            </div>
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
+                Découvrir avec un compte démo
+              </div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
+                Explorez l&apos;outil avec des données fictives — aucune inscription requise
+              </div>
+            </div>
+            <div style={{
+              marginLeft: "auto", fontSize: 18, color: "var(--primary)", flexShrink: 0,
+            }}>
+              →
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   );

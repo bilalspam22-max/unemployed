@@ -5,7 +5,7 @@ import { createContext, useContext, useReducer, type ReactNode } from "react";
 // ─── State ────────────────────────────────────────────────────────────────────
 
 interface DrawerState {
-  type: "company" | "contact" | "application" | "cv" | "training" | null;
+  type: "company" | "contact" | "application" | "cv" | "training" | "meeting" | null;
   id: string | null;
 }
 

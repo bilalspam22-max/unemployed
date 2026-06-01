@@ -14,9 +14,12 @@ import {
   Menu,
   LogOut,
   Shield,
+  CalendarCheck,
+  Network,
 } from "lucide-react";
 import { useSidebar } from "@/lib/store";
 import { useSession } from "@/lib/auth-client";
+import { useIsDemo } from "@/lib/demo-provider";
 import { getInitials, avatarColor } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -30,13 +33,15 @@ async function handleSignOut() {
 }
 
 const NAV_ITEMS = [
-  { href: "/dashboard",    label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/sectors",      label: "Secteurs",        icon: Layers },
-  { href: "/companies",    label: "Entreprises",     icon: Briefcase },
-  { href: "/contacts",     label: "Contacts",        icon: Users },
-  { href: "/applications", label: "Candidatures",    icon: KanbanSquare },
-  { href: "/cvs",          label: "CV par secteur",  icon: FileText },
-  { href: "/followups",    label: "Relances",        icon: Bell },
+  { href: "/dashboard",    label: "Tableau de bord",  icon: LayoutDashboard },
+  { href: "/overview",     label: "Vue d'ensemble",   icon: Network },
+  { href: "/sectors",      label: "Secteurs",         icon: Layers },
+  { href: "/companies",    label: "Entreprises",      icon: Briefcase },
+  { href: "/contacts",     label: "Contacts",         icon: Users },
+  { href: "/applications", label: "Candidatures",     icon: KanbanSquare },
+  { href: "/meetings",     label: "Réunions",         icon: CalendarCheck },
+  { href: "/cvs",          label: "CV par secteur",   icon: FileText },
+  { href: "/followups",    label: "Relances",         icon: Bell },
 ];
 
 const PHASE2_ITEMS = [
@@ -48,6 +53,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user;
+  const isDemo = useIsDemo();
+  const demoSuffix = isDemo ? "?demo=true" : "";
 
   const initials = user ? getInitials(
     user.name?.split(" ")[0] ?? "U",
@@ -61,7 +68,17 @@ export function Sidebar() {
         <div className="brand__mark" style={{ flexShrink: 0 }} />
         {!collapsed && (
           <div>
-            <div className="brand__name">recherche.</div>
+            <div className="brand__name" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              recherche.
+              {isDemo && (
+                <span style={{
+                  fontSize: 9, fontWeight: 800, letterSpacing: "0.08em",
+                  padding: "2px 6px", borderRadius: 4,
+                  background: "linear-gradient(135deg, #E08A2B, #D44A5C)",
+                  color: "white", flexShrink: 0,
+                }}>DÉMO</span>
+              )}
+            </div>
             <div className="brand__sub">CRM personnel · job search</div>
           </div>
         )}
@@ -72,7 +89,7 @@ export function Sidebar() {
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
           return (
-            <Link key={href} href={href} className={`nav-item ${active ? "nav-item--active" : ""}`}>
+            <Link key={href} href={`${href}${demoSuffix}`} className={`nav-item ${active ? "nav-item--active" : ""}`}>
               <span className="nav-item__icon">
                 <Icon size={16} strokeWidth={1.75} />
               </span>
@@ -88,7 +105,7 @@ export function Sidebar() {
         {PHASE2_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
-            <Link key={href} href={href} className={`nav-item ${active ? "nav-item--active" : ""}`}>
+            <Link key={href} href={`${href}${demoSuffix}`} className={`nav-item ${active ? "nav-item--active" : ""}`}>
               <span className="nav-item__icon">
                 <Icon size={16} strokeWidth={1.75} />
               </span>
@@ -147,8 +164,11 @@ export function Sidebar() {
         {!collapsed && (
           <button
             className="btn btn--ghost btn--icon"
-            title="Se déconnecter"
-            onClick={handleSignOut}
+            title={isDemo ? "Quitter la démo" : "Se déconnecter"}
+            onClick={() => {
+              if (isDemo) { window.location.href = "/login"; }
+              else { handleSignOut(); }
+            }}
           >
             <LogOut size={14} />
           </button>

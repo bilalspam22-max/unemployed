@@ -13,21 +13,25 @@ import {
   FileText,
   Bell,
   GraduationCap,
+  CalendarCheck,
+  Network,
   X,
 } from "lucide-react";
 
 const MAIN_ITEMS = [
   { href: "/dashboard",    label: "Accueil",       icon: LayoutDashboard },
-  { href: "/companies",    label: "Entreprises",   icon: Briefcase },
+  { href: "/overview",     label: "Vue d'ensemble",icon: Network },
   { href: "/applications", label: "Candidatures",  icon: KanbanSquare },
   { href: "/contacts",     label: "Contacts",      icon: Users },
 ];
 
 const MORE_ITEMS = [
-  { href: "/sectors",   label: "Secteurs",    icon: Layers },
-  { href: "/cvs",       label: "CV",          icon: FileText },
-  { href: "/followups", label: "Relances",    icon: Bell },
-  { href: "/training",  label: "Formations",  icon: GraduationCap },
+  { href: "/companies",  label: "Entreprises", icon: Briefcase },
+  { href: "/meetings",   label: "Réunions",    icon: CalendarCheck },
+  { href: "/sectors",    label: "Secteurs",    icon: Layers },
+  { href: "/cvs",        label: "CV",          icon: FileText },
+  { href: "/followups",  label: "Relances",    icon: Bell },
+  { href: "/training",   label: "Formations",  icon: GraduationCap },
 ];
 
 export function MobileNav() {

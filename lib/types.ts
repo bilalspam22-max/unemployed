@@ -158,6 +158,40 @@ export interface Training {
   sector?: Sector | null;
 }
 
+// ─── Meetings ────────────────────────────────────────────────────────────────
+
+export type MeetingSentiment = "positive" | "neutral" | "negative";
+
+export interface QuestionItem {
+  question: string;
+  asked: boolean;
+  answer: string;
+}
+
+export interface Meeting {
+  id: string;
+  userId: string;
+  companyId: string | null;
+  contactId: string | null;
+  applicationId: string | null;
+  title: string;
+  date: string;
+  companyInfo: string | null;
+  myPitch: string | null;
+  jobMentioned: string | null;
+  sentiment: MeetingSentiment | null;
+  sentimentNotes: string | null;
+  questionsData: QuestionItem[];
+  nextSteps: string | null;
+  notes: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  // Joined
+  company?: Company | null;
+  contact?: Contact | null;
+  application?: Application | null;
+}
+
 // ─── Dashboard stats ─────────────────────────────────────────────────────────
 
 export interface DashboardStats {

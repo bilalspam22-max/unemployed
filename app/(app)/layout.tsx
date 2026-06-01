@@ -5,11 +5,14 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { QuickAdd } from "@/components/layout/quick-add";
 import { ToastHost } from "@/components/layout/toast-host";
+import { DemoWrapper } from "./demo-wrapper";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AppProvider>
-      <AppShell>{children}</AppShell>
+      <DemoWrapper>
+        <AppShell>{children}</AppShell>
+      </DemoWrapper>
     </AppProvider>
   );
 }
