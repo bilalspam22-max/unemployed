@@ -147,6 +147,8 @@ export const followups = sqliteTable("followup", {
   scheduledDate:        text("scheduledDate").notNull(),
   status:               text("status", { enum: ["pending", "completed", "skipped"] }).notNull().default("pending"),
   messageTemplateUsed:  text("messageTemplateUsed"),
+  myMessage:            text("myMessage"),
+  interlocutorResponse: text("interlocutorResponse"),
   completedAt:          text("completedAt"),
   createdAt:            integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });

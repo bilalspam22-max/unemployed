@@ -11,6 +11,7 @@ import { KpiGridSkeleton } from "@/components/ui/skeleton";
 import { relativeDate, formatDateShort } from "@/lib/utils";
 import { getDailyQuote } from "@/lib/quotes";
 import type { Contact, Insight } from "@/lib/types";
+import type { CalendarEvent } from "@/app/api/calendar/route";
 import { useSession } from "@/lib/auth-client";
 
 interface StreakData { current: number; best: number; lastActivity: string | null; }
@@ -28,10 +29,26 @@ interface DashboardData {
   todayFollowups: Array<{ id: string; contactId: string | null; scheduledDate: string }>;
 }
 
+const EVENT_DOT_COLORS: Record<string, string> = {
+  contact_followup: "var(--primary)",
+  followup:         "var(--primary)",
+  followup_done:    "var(--muted)",
+  meeting:          "var(--plum)",
+  application:      "var(--warn)",
+};
+
 function CalendarMini() {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+
+  useEffect(() => {
+    fetch("/api/calendar")
+      .then(r => r.json())
+      .then(r => setEvents(r.data ?? []))
+      .catch(() => {});
+  }, []);
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -39,13 +56,24 @@ function CalendarMini() {
   const today = isCurrentMonth ? now.getDate() : -1;
 
   const DAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
-  const adjustedFirst = (firstDay + 6) % 7; // Monday-first
+  const adjustedFirst = (firstDay + 6) % 7;
 
   const cells: (number | null)[] = [...Array(adjustedFirst).fill(null)];
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
   const MONTH_NAMES = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+  // Group events by day for the current view month
+  const eventsByDay: Record<number, CalendarEvent[]> = {};
+  events.forEach(ev => {
+    const d = new Date(ev.date);
+    if (d.getFullYear() === viewYear && d.getMonth() === viewMonth) {
+      const day = d.getDate();
+      if (!eventsByDay[day]) eventsByDay[day] = [];
+      eventsByDay[day].push(ev);
+    }
+  });
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
@@ -78,14 +106,32 @@ function CalendarMini() {
         {DAY_LABELS.map((d, i) => (
           <div key={`h-${i}`} className="cal__head">{d}</div>
         ))}
-        {cells.map((day, i) => (
-          <div
-            key={i}
-            className={`cal__cell${!day ? " cal__cell--out" : ""}${day === today ? " cal__cell--today" : ""}`}
-          >
-            {day && <span className="cal__day">{day}</span>}
-          </div>
-        ))}
+        {cells.map((day, i) => {
+          const dayEvents = day ? (eventsByDay[day] ?? []) : [];
+          const dotTypes = [...new Set(dayEvents.map(e => e.type))].slice(0, 3);
+          return (
+            <div
+              key={i}
+              className={`cal__cell${!day ? " cal__cell--out" : ""}${day === today ? " cal__cell--today" : ""}`}
+            >
+              {day && <span className="cal__day">{day}</span>}
+              {dotTypes.length > 0 && (
+                <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 1 }}>
+                  {dotTypes.map(type => (
+                    <div
+                      key={type}
+                      style={{
+                        width: 4, height: 4, borderRadius: "50%",
+                        background: EVENT_DOT_COLORS[type] ?? "var(--muted)",
+                        flexShrink: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

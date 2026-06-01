@@ -1,24 +1,39 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { CheckCircle2, Plus } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/lib/store";
 import { formatDateShort } from "@/lib/utils";
 import type { Followup, Contact } from "@/lib/types";
+import type { CalendarEvent } from "@/app/api/calendar/route";
+
+// ─── Event type config ────────────────────────────────────────────────────────
+
+const EVENT_CFG = {
+  contact_followup: { color: "var(--primary)", bg: "var(--primary-soft)", label: "Relance" },
+  followup:         { color: "var(--primary)", bg: "var(--primary-soft)", label: "Relance" },
+  followup_done:    { color: "var(--muted)", bg: "var(--surface-2)", label: "Relance archivée" },
+  meeting:          { color: "var(--plum)", bg: "var(--plum-soft, #f3eaff)", label: "Réunion" },
+  application:      { color: "var(--warn)", bg: "var(--warn-soft)", label: "Candidature" },
+} as const;
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FollowupsPage() {
-  const [followups, setFollowups]   = useState<Followup[]>([]);
-  const [contacts, setContacts]     = useState<Contact[]>([]);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [aiMessages, setAiMessages] = useState<Array<{ tone: string; toneLabel: string; message: string }> | null>(null);
-  const [loadingAI, setLoadingAI]   = useState(false);
+  const [followups, setFollowups]         = useState<Followup[]>([]);
+  const [contacts, setContacts]           = useState<Contact[]>([]);
+  const [calEvents, setCalEvents]         = useState<CalendarEvent[]>([]);
+  const [selectedDay, setSelectedDay]     = useState<number | null>(null);
+  const [aiMessages, setAiMessages]       = useState<Array<{ tone: string; toneLabel: string; message: string }> | null>(null);
+  const [loadingAI, setLoadingAI]         = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const { showToast } = useToast();
 
   const load = useCallback(() => {
     fetch("/api/followups").then(r => r.json()).then(r => setFollowups(r.data ?? []));
     fetch("/api/contacts").then(r => r.json()).then(r => setContacts(r.data ?? []));
+    fetch("/api/calendar").then(r => r.json()).then(r => setCalEvents(r.data ?? []));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -37,13 +52,14 @@ export default function FollowupsPage() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const followupsByDay: Record<number, Followup[]> = {};
-  followups.forEach(f => {
-    const d = new Date(f.scheduledDate);
+  // Group calendar events by day (current month only)
+  const eventsByDay: Record<number, CalendarEvent[]> = {};
+  calEvents.forEach(ev => {
+    const d = new Date(ev.date);
     if (d.getFullYear() === year && d.getMonth() === month) {
       const day = d.getDate();
-      if (!followupsByDay[day]) followupsByDay[day] = [];
-      followupsByDay[day].push(f);
+      if (!eventsByDay[day]) eventsByDay[day] = [];
+      eventsByDay[day].push(ev);
     }
   });
 
@@ -52,6 +68,14 @@ export default function FollowupsPage() {
 
   const MONTH_NAMES = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
   const DAY_LABELS  = ["L","M","M","J","V","S","D"];
+
+  // Events for selected day
+  const selectedDayStr = selectedDay
+    ? `${year}-${String(month + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`
+    : null;
+  const selectedDayEvents = selectedDayStr
+    ? calEvents.filter(ev => ev.date === selectedDayStr)
+    : [];
 
   async function markDone(f: Followup) {
     await fetch(`/api/followups/${f.id}`, {
@@ -102,33 +126,107 @@ export default function FollowupsPage() {
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>
             {MONTH_NAMES[month]} {year}
           </div>
+
+          {/* Légende */}
+          <div className="row gap-3" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+            {(["contact_followup", "meeting", "application"] as const).map(type => {
+              const cfg = EVENT_CFG[type];
+              return (
+                <div key={type} className="row gap-1" style={{ alignItems: "center" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>{cfg.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
           <div className="cal">
             {DAY_LABELS.map((d, i) => <div key={i} className="cal__head">{d}</div>)}
             {cells.map((day, i) => {
-              const dayFollowups = day ? (followupsByDay[day] ?? []) : [];
+              const dayEvents = day ? (eventsByDay[day] ?? []) : [];
               const isToday = day === today;
               const isSelected = day === selectedDay;
+              const hasEvents = dayEvents.length > 0;
               return (
                 <div
                   key={i}
                   className={`cal__cell${!day ? " cal__cell--out" : ""}${isToday ? " cal__cell--today" : ""}${isSelected ? " cal__cell--selected" : ""}`}
                   onClick={() => day && setSelectedDay(day === selectedDay ? null : day)}
+                  style={{ cursor: day ? "pointer" : undefined }}
                 >
                   {day && <span className="cal__day">{day}</span>}
                   <div className="cal__events">
-                    {dayFollowups.slice(0, 2).map(f => (
-                      <div key={f.id} className={`cal__ev${f.status === "completed" ? " cal__ev--success" : ""}`}>
-                        {contactMap[f.contactId ?? ""]?.firstName ?? "…"}
-                      </div>
-                    ))}
-                    {dayFollowups.length > 2 && (
-                      <div className="cal__ev">+{dayFollowups.length - 2}</div>
-                    )}
+                    {/* Colored dots grouped by type */}
+                    {hasEvents && (() => {
+                      const types = [...new Set(dayEvents.map(e => e.type))];
+                      return (
+                        <div style={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap", marginTop: 2 }}>
+                          {types.slice(0, 3).map(type => {
+                            const cfg = EVENT_CFG[type as keyof typeof EVENT_CFG];
+                            const count = dayEvents.filter(e => e.type === type).length;
+                            return (
+                              <div
+                                key={type}
+                                style={{
+                                  width: 6, height: 6, borderRadius: "50%",
+                                  background: cfg?.color ?? "var(--muted)",
+                                  position: "relative",
+                                }}
+                                title={`${count} ${cfg?.label ?? type}`}
+                              />
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Selected day detail */}
+          {selectedDay && selectedDayEvents.length > 0 && (
+            <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "var(--muted)" }}>
+                {selectedDay} {MONTH_NAMES[month]}
+              </div>
+              <div className="col gap-2">
+                {selectedDayEvents.map(ev => {
+                  const cfg = EVENT_CFG[ev.type as keyof typeof EVENT_CFG];
+                  return (
+                    <div
+                      key={ev.id}
+                      style={{
+                        display: "flex", alignItems: "flex-start", gap: 8,
+                        padding: "7px 10px",
+                        borderRadius: "var(--r-sm)",
+                        background: cfg?.bg ?? "var(--surface-2)",
+                        border: `1px solid ${cfg?.color ?? "var(--border)"}22`,
+                      }}
+                    >
+                      <div style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: cfg?.color ?? "var(--muted)",
+                        marginTop: 4, flexShrink: 0,
+                      }} />
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{ev.label}</div>
+                        <div style={{ fontSize: 10, color: cfg?.color ?? "var(--muted)", fontWeight: 700, textTransform: "uppercase", marginTop: 1 }}>
+                          {cfg?.label ?? ev.type}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {selectedDay && selectedDayEvents.length === 0 && (
+            <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 12, textAlign: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>Aucun événement ce jour.</span>
+            </div>
+          )}
         </div>
 
         {/* Cette semaine */}
@@ -157,7 +255,7 @@ export default function FollowupsPage() {
                   )}
                   {contact?.lastExchangeSummary && (
                     <div style={{ fontSize: 12.5, fontStyle: "italic", color: "var(--ink-3)", marginBottom: 10, borderLeft: "2px solid var(--border-strong)", paddingLeft: 10 }}>
-                      "{contact.lastExchangeSummary.slice(0, 80)}…"
+                      &ldquo;{contact.lastExchangeSummary.slice(0, 80)}…&rdquo;
                     </div>
                   )}
                   <div className="row gap-2">

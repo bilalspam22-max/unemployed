@@ -130,6 +130,8 @@ export interface Followup {
   scheduledDate: string;
   status: FollowupStatus;
   messageTemplateUsed: string | null;
+  myMessage: string | null;
+  interlocutorResponse: string | null;
   completedAt: string | null;
   createdAt: Date | null;
   // Joined

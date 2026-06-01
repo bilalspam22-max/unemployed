@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Send, Star } from "lucide-react";
+import { Plus, Send, Star, History, ChevronDown, ChevronUp, MessageSquare, MessageCircleReply } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { TempDot, Badge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/drawer";
@@ -11,10 +11,12 @@ import { ListSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/lib/store";
 import { Users as UsersIcon, Search } from "lucide-react";
-import { relativeDate } from "@/lib/utils";
-import type { Contact } from "@/lib/types";
+import { relativeDate, formatDate } from "@/lib/utils";
+import type { Contact, Followup } from "@/lib/types";
 
 type Filter = "all" | "hot" | "followup" | "week";
+
+// ─── Contact Form ─────────────────────────────────────────────────────────────
 
 function ContactForm({ onSubmit, onClose, initial }: {
   onSubmit: (data: Partial<Contact>) => Promise<void>;
@@ -142,6 +144,173 @@ function ContactForm({ onSubmit, onClose, initial }: {
   );
 }
 
+// ─── Archive Followup Modal ───────────────────────────────────────────────────
+
+function ArchiveFollowupModal({ contact, onArchive, onClose }: {
+  contact: Contact;
+  onArchive: (data: { myMessage: string; interlocutorResponse: string; nextFollowupDate: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [myMessage, setMyMessage] = useState("");
+  const [interlocutorResponse, setInterlocutorResponse] = useState("");
+  const [nextFollowupDate, setNextFollowupDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handle(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await onArchive({ myMessage, interlocutorResponse, nextFollowupDate });
+    setSaving(false);
+  }
+
+  return (
+    <form onSubmit={handle}>
+      <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
+        Archiver la relance de <strong>{contact.firstName} {contact.lastName}</strong> du{" "}
+        <strong>{contact.nextFollowupDate ?? today}</strong>.
+        Renseigne ce qui s'est passé, puis définis une nouvelle date si besoin.
+      </p>
+
+      <div className="field">
+        <label className="label">
+          <MessageSquare size={13} style={{ display: "inline", marginRight: 4 }} />
+          Ce que j'ai dit / envoyé
+        </label>
+        <textarea
+          className="input"
+          value={myMessage}
+          onChange={e => setMyMessage(e.target.value)}
+          rows={3}
+          placeholder="Ex : J'ai relancé par LinkedIn en mentionnant l'ouverture de poste vue sur leur site…"
+        />
+      </div>
+
+      <div className="field">
+        <label className="label">
+          <MessageCircleReply size={13} style={{ display: "inline", marginRight: 4 }} />
+          Réponse de l'interlocuteur (optionnel)
+        </label>
+        <textarea
+          className="input"
+          value={interlocutorResponse}
+          onChange={e => setInterlocutorResponse(e.target.value)}
+          rows={3}
+          placeholder="Ex : Pas de réponse / A dit qu'il me rappelle fin juillet / A proposé un entretien le…"
+        />
+      </div>
+
+      <div className="field">
+        <label className="label">Prochaine date de relance (optionnel)</label>
+        <input
+          className="input"
+          type="date"
+          value={nextFollowupDate}
+          onChange={e => setNextFollowupDate(e.target.value)}
+          min={today}
+        />
+        <span style={{ fontSize: 11, color: "var(--muted)", marginTop: 4, display: "block" }}>
+          Laisser vide pour ne pas planifier de nouvelle relance.
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="submit" className="btn btn--primary" disabled={saving}>
+          {saving ? "Archivage…" : "Archiver cette relance"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Contact History ──────────────────────────────────────────────────────────
+
+function ContactHistory({ contactId }: { contactId: string }) {
+  const [history, setHistory] = useState<Followup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/followups?contactId=${contactId}`)
+      .then(r => r.json())
+      .then(r => {
+        setHistory((r.data ?? []).filter((f: Followup) => f.status === "completed"));
+        setLoading(false);
+      });
+  }, [contactId]);
+
+  if (loading) return <div className="muted tiny" style={{ padding: "8px 0" }}>Chargement…</div>;
+  if (history.length === 0) return (
+    <div className="muted tiny" style={{ padding: "8px 0", fontStyle: "italic" }}>
+      Aucune relance archivée pour ce contact.
+    </div>
+  );
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setExpanded(p => !p)}
+        className="row gap-2"
+        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink)", fontWeight: 600, fontSize: 12, padding: "4px 0", width: "100%" }}
+      >
+        <History size={13} />
+        {history.length} relance{history.length > 1 ? "s" : ""} archivée{history.length > 1 ? "s" : ""}
+        {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {expanded && (
+        <div className="col gap-2" style={{ marginTop: 8 }}>
+          {history.map(f => (
+            <div
+              key={f.id}
+              style={{
+                borderRadius: "var(--r-md)",
+                border: "1px solid var(--border)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{
+                background: "var(--surface-2)",
+                padding: "6px 12px",
+                fontSize: 11,
+                fontWeight: 700,
+                color: "var(--muted)",
+                letterSpacing: "0.03em",
+              }}>
+                {formatDate(f.scheduledDate)}
+              </div>
+              {f.myMessage && (
+                <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", marginBottom: 3 }}>
+                    Ce que j'ai dit
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink)", whiteSpace: "pre-wrap" }}>{f.myMessage}</div>
+                </div>
+              )}
+              {f.interlocutorResponse && (
+                <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border)", background: "var(--success-soft)" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--success)", textTransform: "uppercase", marginBottom: 3 }}>
+                    Réponse reçue
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink)", whiteSpace: "pre-wrap" }}>{f.interlocutorResponse}</div>
+                </div>
+              )}
+              {!f.myMessage && !f.interlocutorResponse && (
+                <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>
+                  Relance enregistrée sans notes.
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selected, setSelected] = useState<Contact | null>(null);
@@ -152,6 +321,7 @@ export default function ContactsPage() {
   const [loadingAI, setLoadingAI] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [archiveTarget, setArchiveTarget] = useState<Contact | null>(null);
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
@@ -187,17 +357,43 @@ export default function ContactsPage() {
     showToast("Contact supprimé");
   }
 
-  async function markFollowupDone(contact: Contact) {
-    const nextDate = new Date();
-    nextDate.setDate(nextDate.getDate() + 14);
-    const updated = {
-      lastExchangeDate: new Date().toISOString().slice(0, 10),
-      nextFollowupDate: nextDate.toISOString().slice(0, 10),
+  async function handleArchiveFollowup(contact: Contact, data: { myMessage: string; interlocutorResponse: string; nextFollowupDate: string }) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Create archived followup record
+    await fetch("/api/followups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contactId: contact.id,
+        scheduledDate: contact.nextFollowupDate ?? today,
+        status: "completed",
+        completedAt: today,
+        myMessage: data.myMessage || null,
+        interlocutorResponse: data.interlocutorResponse || null,
+      }),
+    });
+
+    // Update contact: clear current followup date, update exchange info, set new date if provided
+    const contactUpdate: Partial<Contact> = {
+      lastExchangeDate: today,
+      lastExchangeSummary: data.myMessage
+        ? data.myMessage.slice(0, 200)
+        : contact.lastExchangeSummary,
+      nextFollowupDate: data.nextFollowupDate || null,
     };
-    await fetch(`/api/contacts/${contact.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
-    setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, ...updated } : c));
-    if (selected?.id === contact.id) setSelected(prev => prev ? { ...prev, ...updated } : null);
-    showToast(`Relance enregistrée — ${contact.firstName} ✓`);
+
+    const resp = await fetch(`/api/contacts/${contact.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(contactUpdate),
+    });
+    const { data: updated } = await resp.json();
+    setContacts(prev => prev.map(c => c.id === updated.id ? updated : c));
+    if (selected?.id === contact.id) setSelected(updated);
+
+    setArchiveTarget(null);
+    showToast(`Relance archivée — ${contact.firstName} ✓`);
   }
 
   async function loadAIMessages(contact: Contact) {
@@ -296,18 +492,24 @@ export default function ContactsPage() {
               <div className="muted tiny">{c.role ?? "—"}</div>
             </div>
             <div className="muted tiny">{c.lastExchangeDate ? relativeDate(c.lastExchangeDate) : "Jamais"}</div>
-            <div className="muted tiny">{c.nextFollowupDate ? `Relance le ${c.nextFollowupDate}` : "—"}</div>
+            <div className="muted tiny" style={{ color: c.nextFollowupDate && c.nextFollowupDate <= today ? "var(--danger)" : undefined }}>
+              {c.nextFollowupDate ? `Relance le ${c.nextFollowupDate}` : "—"}
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {c.trustLevel !== null && Array.from({ length: 5 }).map((_, i) => (
                 <Star key={i} size={10} fill={i < (c.trustLevel ?? 0) ? "var(--warn)" : "none"} color={i < (c.trustLevel ?? 0) ? "var(--warn)" : "var(--border-strong)"} />
               ))}
             </div>
-            <button
-              className="btn btn--sm btn--primary"
-              onClick={e => { e.stopPropagation(); markFollowupDone(c); }}
-            >
-              Relancer
-            </button>
+            {c.nextFollowupDate ? (
+              <button
+                className="btn btn--sm btn--primary"
+                onClick={e => { e.stopPropagation(); setArchiveTarget(c); }}
+              >
+                <Send size={11} /> Relancer
+              </button>
+            ) : (
+              <div style={{ width: 80 }} />
+            )}
           </div>
         ))}
       </div>
@@ -323,9 +525,11 @@ export default function ContactsPage() {
           footer={
             <>
               <button className="btn" style={{ color: "var(--danger)" }} onClick={() => setConfirmDelete(true)}>Supprimer</button>
-              <button className="btn btn--full" onClick={() => markFollowupDone(selected)}>
-                <Send size={13} /> Marquer relancé
-              </button>
+              {selected.nextFollowupDate && (
+                <button className="btn btn--full" onClick={() => setArchiveTarget(selected)}>
+                  <Send size={13} /> Archiver la relance
+                </button>
+              )}
             </>
           }
         >
@@ -357,10 +561,26 @@ export default function ContactsPage() {
             <div style={{ marginBottom: 16 }}>
               <div className="section-title">Prochaine relance</div>
               <div className="row gap-2">
-                <span style={{ fontSize: 13, fontWeight: 600 }}>
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: selected.nextFollowupDate && selected.nextFollowupDate <= today ? "var(--danger)" : undefined,
+                }}>
                   {selected.nextFollowupDate ?? "Non définie"}
                 </span>
+                {selected.nextFollowupDate && selected.nextFollowupDate <= today && (
+                  <Badge tone="danger">En retard</Badge>
+                )}
               </div>
+            </div>
+
+            {/* Historique des relances */}
+            <div style={{ marginBottom: 16 }}>
+              <div className="section-title" style={{ marginBottom: 8 }}>
+                <History size={13} style={{ display: "inline", marginRight: 4 }} />
+                Historique des relances
+              </div>
+              <ContactHistory contactId={selected.id} />
             </div>
 
             {/* AI Suggestions */}
@@ -406,9 +626,26 @@ export default function ContactsPage() {
         </Drawer>
       )}
 
+      {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau contact" size="lg">
         <ContactForm onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
       </Modal>
+
+      {/* Archive Followup Modal */}
+      {archiveTarget && (
+        <Modal
+          open={true}
+          onClose={() => setArchiveTarget(null)}
+          title="Archiver cette relance"
+          size="md"
+        >
+          <ArchiveFollowupModal
+            contact={archiveTarget}
+            onArchive={data => handleArchiveFollowup(archiveTarget, data)}
+            onClose={() => setArchiveTarget(null)}
+          />
+        </Modal>
+      )}
 
       <ConfirmDialog
         open={confirmDelete}
