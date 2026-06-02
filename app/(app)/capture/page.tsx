@@ -15,24 +15,22 @@ function buildJobBookmarklet(origin: string): string {
 var O=${JSON.stringify(origin)};
 function q(s,r){try{return (r||document).querySelector(s);}catch(_){return null;}}
 function txt(e){return e?(e.textContent||"").trim().replace(/\\s+/g," "):"";}
-function meta(n){var e=q('meta[property="'+n+'"]')||q('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
-var title="",company="",url=location.href,h=location.hostname;
+function rct(e){try{return e.getBoundingClientRect();}catch(_){return null;}}
+function bad(s){return /offres d.emploi|r.sultats|moments forts|personnes que vous/i.test(s);}
+var url=location.href,h=location.hostname,title="",company="",W=window.innerWidth||1200;
+/* 1) Texte surligné = priorité */
 var sel=(window.getSelection?(window.getSelection()+""):"").replace(/\\r/g,"").trim();
 if(sel){var L=sel.split("\\n").map(function(x){return x.trim();}).filter(Boolean);title=L[0]||"";if(L.length>1)company=L[1]||"";}
-if(!title){var S=document.querySelectorAll('script[type="application/ld+json"]');
-for(var i=0;i<S.length;i++){try{var d=JSON.parse(S[i].textContent);var a=Array.isArray(d)?d:(d["@graph"]||[d]);for(var j=0;j<a.length;j++){var o=a[j];if(!o)continue;var ty=o["@type"];if(ty==="JobPosting"||(Array.isArray(ty)&&ty.indexOf("JobPosting")>-1)){title=o.title||title;var ho=o.hiringOrganization;if(ho&&!company)company=(typeof ho==="string"?ho:ho.name)||"";}}}catch(e){}}}
-if(h.indexOf("linkedin")>-1){
-  var pane=q(".jobs-search__job-details")||q(".scaffold-layout__detail")||q(".jobs-semantic-search__job-details")||q(".job-view-layout");
-  if(!title)title=txt(q(".job-details-jobs-unified-top-card__job-title",pane||document))||txt(q(".jobs-unified-top-card__job-title",pane||document));
-  if(!title&&pane)title=txt(q("h1",pane))||txt(q("h2",pane));
-  if(!company)company=txt(q(".job-details-jobs-unified-top-card__company-name a",pane||document))||txt(q(".job-details-jobs-unified-top-card__company-name",pane||document))||txt(q('a[href*="/company/"]',pane||document));
-}else if(h.indexOf("indeed")>-1){
-  if(!title)title=txt(q("h1.jobsearch-JobInfoHeader-title"))||txt(q('[data-testid="jobsearch-JobInfoHeader-title"]'))||txt(q("h1"));
-  if(!company)company=txt(q('[data-testid="inlineHeader-companyName"]'))||txt(q('[data-company-name="true"]'))||txt(q(".jobsearch-CompanyInfoContainer a"));
-}
-var og=meta("og:title");
-if(og&&(!title||!company)){var mm=og.match(/^(.+?)\\s+hiring\\s+(.+?)(?:\\s+in\\s+.+?)?\\s*\\|/i);if(mm){if(!company)company=mm[1].trim();if(!title)title=mm[2].trim();}else if(!title){title=og.replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();}}
-if(!title)title=(document.title||"").replace(/^\\(\\d+\\+?\\)\\s*/,"").replace(/\\s*\\|.*$/,"").trim();
+/* 2) JSON-LD (pages offre directes / Indeed) */
+if(!title){var S=document.querySelectorAll('script[type="application/ld+json"]');for(var i=0;i<S.length;i++){try{var d=JSON.parse(S[i].textContent);var a=Array.isArray(d)?d:(d["@graph"]||[d]);for(var j=0;j<a.length;j++){var o=a[j];if(!o)continue;var ty=o["@type"];if(ty==="JobPosting"||(Array.isArray(ty)&&ty.indexOf("JobPosting")>-1)){title=o.title||title;var ho=o.hiringOrganization;if(ho&&!company)company=(typeof ho==="string"?ho:ho.name)||"";}}}catch(e){}}}
+/* 3) LinkedIn : titre = 1er grand titre du panneau de DROITE (par position, sans dépendre des classes) */
+if(!title&&h.indexOf("linkedin")>-1){var hs=document.querySelectorAll("h1,h2");for(var k=0;k<hs.length;k++){var tt=txt(hs[k]);if(!tt||bad(tt))continue;var r=rct(hs[k]);if(r&&r.width>0&&r.left>=W*0.4){title=tt;break;}}}
+if(!company&&h.indexOf("linkedin")>-1){var cls=document.querySelectorAll('a[href*="/company/"]');for(var k2=0;k2<cls.length;k2++){var ct2=txt(cls[k2]);if(!ct2)continue;var r2=rct(cls[k2]);if(r2&&r2.width>0&&r2.left>=W*0.4){company=ct2;break;}}}
+/* 4) Indeed + page offre simple */
+if(!title&&h.indexOf("indeed")>-1){title=txt(q("h1.jobsearch-JobInfoHeader-title"))||txt(q("h1"));if(!company)company=txt(q('[data-testid="inlineHeader-companyName"]'));}
+if(!title){var H1=txt(q("h1"));if(H1&&!bad(H1))title=H1;}
+/* 5) rien trouvé -> guider */
+if(!title){alert("CLIP v5 — Surligne le TITRE du poste avec ta souris, puis reclique sur ce favori.");return;}
 if(company)company=company.replace(/\\s*[·|].*$/,"").trim();
 var dt=new Date();var today=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
 var via=h.indexOf("linkedin")>-1?"linkedin":"direct";
@@ -52,16 +50,15 @@ function stripLi(s){return (s||"").replace(/^\\(\\d+\\+?\\)\\s*/,"").replace(/\\
 var name="",headline="";
 var sel=(window.getSelection?(window.getSelection()+""):"").replace(/\\r/g,"").trim();
 if(sel){var L=sel.split("\\n").map(function(x){return x.trim();}).filter(Boolean);name=L[0]||"";if(L.length>1)headline=L[1]||"";}
-if(!name){var og=stripLi(meta("og:title"));
-if(og){var parts=og.split(/\\s[-\\u2013\\u2014]\\s/);name=parts[0].trim();if(parts.length>1&&!headline)headline=parts.slice(1).join(" - ").trim();}}
-if(!name||/^linkedin$/i.test(name))name=txt(q("h1"));
-if(!name||/^linkedin$/i.test(name)){var ct=stripLi(document.title);var cp=ct.split(/\\s[-\\u2013\\u2014]\\s/);name=cp[0].trim();if(!headline&&cp.length>1)headline=cp.slice(1).join(" - ").trim();}
+if(!name){var og=stripLi(meta("og:title"));if(og&&!/^linkedin$/i.test(og)){var parts=og.split(/\\s[-\\u2013\\u2014]\\s/);name=parts[0].trim();if(parts.length>1&&!headline)headline=parts.slice(1).join(" - ").trim();}}
+if(!name||/^linkedin$/i.test(name)){var ct=stripLi(document.title);if(ct&&!/^linkedin$/i.test(ct)){var cp=ct.split(/\\s[-\\u2013\\u2014]\\s/);name=cp[0].trim();if(!headline&&cp.length>1)headline=cp.slice(1).join(" - ").trim();}}
+if(!name||/^linkedin$/i.test(name)){var h1=txt(q("h1"));if(h1&&!/^linkedin$/i.test(h1))name=h1;}
+if(!name||/^linkedin$/i.test(name)){alert("CLIP v5 — Surligne le NOM de la personne avec ta souris, puis reclique sur ce favori.");return;}
 if(!headline)headline=txt(q(".text-body-medium.break-words"))||txt(q(".text-body-medium"));
 headline=headline.replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();
 var role=headline,company="";
 var m=headline.split(/\\s+(?:chez|at|@|\\u00b7|\\|)\\s+/i);
 if(m.length>1){role=m[0].trim();company=m.slice(1).join(" ").trim();}
-if(!company){var cl=q('a[href*="/company/"]');if(cl)company=txt(cl).replace(/\\s*[·|].*$/,"").trim();}
 var p=name.split(" ").filter(Boolean);var first=p.shift()||"";var last=p.join(" ");
 var url=location.href.split("?")[0];
 var qs="?new=1&firstName="+encodeURIComponent(first)+"&lastName="+encodeURIComponent(last)+"&role="+encodeURIComponent(role)+"&company="+encodeURIComponent(company)+"&linkedin="+encodeURIComponent(url);
@@ -152,8 +149,8 @@ export default function CapturePage() {
           <MousePointerClick size={13} /> 100% gratuit, aucune installation, aucune donnée envoyée à un tiers — le favori ouvre directement ton appli.
         </div>
         <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--warn-soft)", borderRadius: "var(--r-md)", fontSize: 12.5, color: "#95571a" }}>
-          <strong>Tu avais déjà ajouté un favori ?</strong> Le code a changé (v3 — capture par sélection).
-          Supprime tes anciens favoris et glisse à nouveau les boutons ci-dessous, sinon tu utilises l&apos;ancien code.
+          <strong>⚠️ Étape obligatoire :</strong> supprime tes anciens favoris « Clip » et glisse à nouveau les boutons ci-dessous (ils s&apos;appellent <strong>« … · v5 »</strong>).
+          La v5 détecte le titre <strong>automatiquement dans le panneau de droite</strong> (vue LinkedIn « collections ») — tu n&apos;as même plus besoin de surligner. Surligner reste possible si jamais l&apos;auto se trompe.
         </div>
       </div>
 
@@ -163,7 +160,7 @@ export default function CapturePage() {
         <div className="card card__pad-lg">
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Clipper une offre</div>
           <div className="muted tiny" style={{ marginBottom: 14 }}>Surligne le titre du poste → nouvelle candidature pré-remplie (lien + date du jour inclus).</div>
-          {jobBm && <BookmarkletLink href={jobBm} label="📋 Clip → Candidature" icon={Briefcase} color="var(--primary)" />}
+          {jobBm && <BookmarkletLink href={jobBm} label="📋 Clip Candidature · v5" icon={Briefcase} color="var(--primary)" />}
           <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => copy(jobBm, "job")} disabled={!jobBm}>
             {copied === "job" ? <><Check size={12} /> Copié</> : <><Copy size={12} /> Copier le code</>}
           </button>
@@ -173,7 +170,7 @@ export default function CapturePage() {
         <div className="card card__pad-lg">
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Clipper un contact</div>
           <div className="muted tiny" style={{ marginBottom: 14 }}>Surligne le nom (et son poste sur la 2ᵉ ligne) → nouveau contact pré-rempli avec l&apos;URL du profil.</div>
-          {contactBm && <BookmarkletLink href={contactBm} label="👤 Clip → Contact" icon={UserPlus} color="var(--success)" />}
+          {contactBm && <BookmarkletLink href={contactBm} label="👤 Clip Contact · v5" icon={UserPlus} color="var(--success)" />}
           <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => copy(contactBm, "contact")} disabled={!contactBm}>
             {copied === "contact" ? <><Check size={12} /> Copié</> : <><Copy size={12} /> Copier le code</>}
           </button>
