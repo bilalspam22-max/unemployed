@@ -13,13 +13,15 @@ import { useToast } from "@/lib/store";
 function buildJobBookmarklet(origin: string): string {
   const code = `(function(){try{
 var O=${JSON.stringify(origin)};
-function t(s){var e=document.querySelector(s);return e?e.textContent.trim().replace(/\\s+/g," "):"";}
+function t(s){try{var e=document.querySelector(s);return e?e.textContent.trim().replace(/\\s+/g," "):"";}catch(_){return"";}}
+function meta(n){var e=document.querySelector('meta[property="'+n+'"]')||document.querySelector('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
 var title="",company="",url=location.href,h=location.hostname;
 var S=document.querySelectorAll('script[type="application/ld+json"]');
 for(var i=0;i<S.length;i++){try{var d=JSON.parse(S[i].textContent);var a=Array.isArray(d)?d:(d["@graph"]||[d]);for(var j=0;j<a.length;j++){var o=a[j];if(!o)continue;var ty=o["@type"];if(ty==="JobPosting"||(Array.isArray(ty)&&ty.indexOf("JobPosting")>-1)){title=o.title||title;var ho=o.hiringOrganization;if(ho)company=(typeof ho==="string"?ho:ho.name)||company;}}}catch(e){}}
-if(!title){if(h.indexOf("linkedin")>-1)title=t(".job-details-jobs-unified-top-card__job-title")||t(".top-card-layout__title")||t("h1");else if(h.indexOf("indeed")>-1)title=t("h1.jobsearch-JobInfoHeader-title")||t('[data-testid="jobsearch-JobInfoHeader-title"]')||t("h1");else title=t("h1");}
-if(!company){if(h.indexOf("linkedin")>-1)company=t(".job-details-jobs-unified-top-card__company-name a")||t(".job-details-jobs-unified-top-card__company-name")||t(".topcard__org-name-link");else if(h.indexOf("indeed")>-1)company=t('[data-testid="inlineHeader-companyName"]')||t('[data-company-name="true"]')||t(".jobsearch-CompanyInfoContainer a");}
-if(!title)title=(document.title||"").replace(/\\s*[|\\-\\u2013].*$/,"").trim();
+if(!title){if(h.indexOf("linkedin")>-1)title=t(".job-details-jobs-unified-top-card__job-title")||t(".jobs-unified-top-card__job-title")||t(".top-card-layout__title")||t("h1");else if(h.indexOf("indeed")>-1)title=t("h1.jobsearch-JobInfoHeader-title")||t('[data-testid="jobsearch-JobInfoHeader-title"]')||t("h1");else title=t("h1");}
+if(!company){if(h.indexOf("linkedin")>-1)company=t(".job-details-jobs-unified-top-card__company-name a")||t(".job-details-jobs-unified-top-card__company-name")||t(".jobs-unified-top-card__company-name")||t(".topcard__org-name-link");else if(h.indexOf("indeed")>-1)company=t('[data-testid="inlineHeader-companyName"]')||t('[data-company-name="true"]')||t(".jobsearch-CompanyInfoContainer a");}
+if(!title){var og=meta("og:title");if(og){title=og.replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();}}
+if(!title)title=(document.title||"").replace(/^\\(\\d+\\+?\\)\\s*/,"").replace(/\\s*\\|.*$/,"").trim();
 var via=h.indexOf("linkedin")>-1?"linkedin":"direct";
 var q="?new=1&via="+via+"&url="+encodeURIComponent(url)+"&title="+encodeURIComponent(title)+"&company="+encodeURIComponent(company);
 window.open(O+"/applications"+q,"_blank");
@@ -30,10 +32,20 @@ window.open(O+"/applications"+q,"_blank");
 function buildContactBookmarklet(origin: string): string {
   const code = `(function(){try{
 var O=${JSON.stringify(origin)};
-function t(s){var e=document.querySelector(s);return e?e.textContent.trim().replace(/\\s+/g," "):"";}
-var name=t("h1")||"";var p=name.split(" ");var first=p.shift()||"";var last=p.join(" ");
-var hl=t(".text-body-medium.break-words")||t(".text-body-medium")||"";
-var role=hl,company="";var m=hl.split(/\\s+(?:at|chez|@|\\|)\\s+/i);if(m.length>1){role=m[0].trim();company=m[1].trim();}
+function t(s){try{var e=document.querySelector(s);return e?e.textContent.trim().replace(/\\s+/g," "):"";}catch(_){return"";}}
+function meta(n){var e=document.querySelector('meta[property="'+n+'"]')||document.querySelector('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
+function stripLi(s){return (s||"").replace(/^\\(\\d+\\+?\\)\\s*/,"").replace(/\\s*[|\\u00b7]\\s*LinkedIn.*$/i,"").replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();}
+var name="",headline="";
+var og=stripLi(meta("og:title"));
+if(og){var parts=og.split(/\\s[-\\u2013\\u2014]\\s/);name=parts[0].trim();if(parts.length>1)headline=parts.slice(1).join(" - ").trim();}
+if(!name||/^linkedin$/i.test(name))name=t("h1");
+if(!name||/^linkedin$/i.test(name)){var ct=stripLi(document.title);var cp=ct.split(/\\s[-\\u2013\\u2014]\\s/);name=cp[0].trim();if(!headline&&cp.length>1)headline=cp.slice(1).join(" - ").trim();}
+if(!headline)headline=t(".text-body-medium.break-words")||t(".text-body-medium")||t(".pv-text-details__left-panel .text-body-medium")||"";
+headline=headline.replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();
+var role=headline,company="";
+var m=headline.split(/\\s+(?:chez|at|@|\\u00b7|\\|)\\s+/i);
+if(m.length>1){role=m[0].trim();company=m.slice(1).join(" ").trim();}
+var p=name.split(" ").filter(Boolean);var first=p.shift()||"";var last=p.join(" ");
 var url=location.href.split("?")[0];
 var q="?new=1&firstName="+encodeURIComponent(first)+"&lastName="+encodeURIComponent(last)+"&role="+encodeURIComponent(role)+"&company="+encodeURIComponent(company)+"&linkedin="+encodeURIComponent(url);
 window.open(O+"/contacts"+q,"_blank");
@@ -110,6 +122,10 @@ export default function CapturePage() {
         </ol>
         <div className="row gap-2" style={{ marginTop: 12, fontSize: 12, color: "var(--muted)" }}>
           <MousePointerClick size={13} /> 100% gratuit, aucune installation, aucune donnée envoyée à un tiers — le favori ouvre directement ton appli.
+        </div>
+        <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--warn-soft)", borderRadius: "var(--r-md)", fontSize: 12.5, color: "#95571a" }}>
+          <strong>Tu avais déjà ajouté un favori ?</strong> Le code a été amélioré (v2) pour mieux capturer les profils LinkedIn.
+          Supprime l&apos;ancien favori et glisse à nouveau le bouton ci-dessous. Pense aussi à attendre que la page LinkedIn soit bien chargée avant de cliquer.
         </div>
       </div>
 

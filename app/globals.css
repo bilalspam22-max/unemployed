@@ -1117,6 +1117,14 @@ input, textarea, select { font: inherit; color: inherit; }
   background: var(--surface-2) !important;
   color: var(--ink-2);
 }
+.cal__pill--drag { cursor: grab; }
+.cal__pill--drag:active { cursor: grabbing; }
+.cal__pill.is-dragging { opacity: 0.35; }
+.cal__cell--drop {
+  outline: 2px dashed var(--primary);
+  outline-offset: -2px;
+  background: var(--primary-soft) !important;
+}
 
 /* Hover popover — detailed view of a day's events */
 .cal__cell--has-events { overflow: visible; }

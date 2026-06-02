@@ -206,11 +206,12 @@ function PrefillReader({ onNew }: { onNew: (p: AppPrefill) => void }) {
   const params = useSearchParams();
   useEffect(() => {
     if (params.get("new") === "1") {
+      const g = (k: string) => { const v = params.get(k); return v && v.trim() ? v.trim() : undefined; };
       onNew({
-        jobTitle:    params.get("title")   ?? undefined,
-        companyName: params.get("company") ?? undefined,
-        sourceUrl:   params.get("url")     ?? undefined,
-        sentVia:     params.get("via")     ?? undefined,
+        jobTitle:    g("title"),
+        companyName: g("company"),
+        sourceUrl:   g("url"),
+        sentVia:     g("via"),
       });
     }
     // run once on mount

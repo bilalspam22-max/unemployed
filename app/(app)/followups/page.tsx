@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { CheckCircle2, Send, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  DndContext, DragEndEvent, DragStartEvent, DragOverlay,
+  PointerSensor, useSensor, useSensors, useDroppable, useDraggable,
+} from "@dnd-kit/core";
+import { CheckCircle2, Send, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CalendarDays, History, MessageSquare } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/lib/store";
 import { formatDateShort } from "@/lib/utils";
 import type { Followup, Contact, Meeting, Application, CalendarEvent } from "@/lib/types";
@@ -23,6 +29,45 @@ function parseLocalDate(iso: string): { y: number; m: number; d: number } {
   const datePart = iso.slice(0, 10); // strip any "T..." time portion
   const [y, m, d] = datePart.split("-").map(Number);
   return { y, m, d };
+}
+
+// Which event types can be rescheduled by drag & drop (future-oriented).
+const DRAGGABLE_TYPES = new Set(["contact_followup", "followup", "meeting"]);
+
+// ─── Droppable day cell ───────────────────────────────────────────────────────
+
+function DayCell({ dateStr, className, onClick, children }: {
+  dateStr: string; className: string; onClick: () => void; children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `day:${dateStr}` });
+  return (
+    <div ref={setNodeRef} className={`${className}${isOver ? " cal__cell--drop" : ""}`} onClick={onClick} style={{ cursor: "pointer" }}>
+      {children}
+    </div>
+  );
+}
+
+// ─── Draggable pill ───────────────────────────────────────────────────────────
+
+function DragPill({ ev, label, color, draggable }: {
+  ev: CalendarEvent; label: string; color: string; draggable: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `${ev.type}|${ev.id}|${ev.contactId ?? ""}`,
+    disabled: !draggable,
+  });
+  return (
+    <span
+      ref={setNodeRef}
+      className={`cal__pill${draggable ? " cal__pill--drag" : ""}${isDragging ? " is-dragging" : ""}`}
+      style={{ background: color }}
+      title={draggable ? "Glisser sur un autre jour pour reprogrammer" : undefined}
+      {...(draggable ? attributes : {})}
+      {...(draggable ? listeners : {})}
+    >
+      {label}
+    </span>
+  );
 }
 
 // ─── Archive Followup Modal (minimal inline version for this page) ─────────────
@@ -73,10 +118,199 @@ function QuickArchiveModal({ contact, onArchive, onClose }: {
   );
 }
 
+// ─── Historique Timeline ──────────────────────────────────────────────────────
+
+const MONTH_NAMES_FULL = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+function HistoriqueTimeline({ followups, contacts }: { followups: Followup[]; contacts: Contact[] }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const contactMap = Object.fromEntries(contacts.map(c => [c.id, c]));
+
+  const completed = [...followups]
+    .filter(f => f.status === "completed")
+    .sort((a, b) => {
+      const da = a.completedAt ?? a.scheduledDate;
+      const db = b.completedAt ?? b.scheduledDate;
+      return db.localeCompare(da);
+    });
+
+  const groups: Array<{ key: string; label: string; items: Followup[] }> = [];
+  for (const f of completed) {
+    const dateStr = (f.completedAt ?? f.scheduledDate).slice(0, 10);
+    const [y, m] = dateStr.split("-").map(Number);
+    const key = `${y}-${String(m).padStart(2, "0")}`;
+    const existing = groups.find(g => g.key === key);
+    const label = `${MONTH_NAMES_FULL[m - 1]} ${y}`;
+    if (existing) existing.items.push(f);
+    else groups.push({ key, label, items: [f] });
+  }
+
+  if (completed.length === 0) {
+    return (
+      <EmptyState
+        icon={History}
+        title="Aucune relance archivée"
+        description="Les relances complétées apparaîtront ici avec le détail de vos échanges."
+        tone="neutral"
+      />
+    );
+  }
+
+  return (
+    <div>
+      {groups.map(group => (
+        <div key={group.key} style={{ marginBottom: 36 }}>
+          <div style={{
+            fontWeight: 700, fontSize: 11, color: "var(--muted)",
+            textTransform: "uppercase", letterSpacing: "0.1em",
+            marginBottom: 14, display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            {group.label}
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+          </div>
+
+          <div style={{ position: "relative", paddingLeft: 24 }}>
+            {/* Ligne verticale */}
+            <div style={{
+              position: "absolute", left: 8, top: 8, bottom: 8,
+              width: 2, background: "var(--border)",
+            }} />
+
+            <div className="col gap-3">
+              {group.items.map(f => {
+                const contact = contactMap[f.contactId ?? ""];
+                const isOpen = expanded.has(f.id);
+                const dateStr = (f.completedAt ?? f.scheduledDate).slice(0, 10);
+                const hasContent = !!(f.myMessage || f.interlocutorResponse);
+
+                return (
+                  <div key={f.id} style={{ position: "relative" }}>
+                    {/* Point de timeline */}
+                    <div style={{
+                      position: "absolute", left: -24, top: 16,
+                      width: 10, height: 10, borderRadius: "50%",
+                      background: "var(--success)", border: "2px solid var(--bg)",
+                      zIndex: 1,
+                    }} />
+
+                    <div
+                      className="card"
+                      style={{ overflow: "hidden", cursor: hasContent ? "pointer" : "default" }}
+                      onClick={() => {
+                        if (!hasContent) return;
+                        setExpanded(prev => {
+                          const next = new Set(prev);
+                          if (next.has(f.id)) next.delete(f.id); else next.add(f.id);
+                          return next;
+                        });
+                      }}
+                    >
+                      {/* En-tête de l'entrée */}
+                      <div style={{ padding: "10px 14px" }}>
+                        <div className="row gap-3" style={{ alignItems: "center" }}>
+                          {contact && (
+                            <Avatar firstName={contact.firstName} lastName={contact.lastName} size="sm" />
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>
+                              {contact ? `${contact.firstName} ${contact.lastName}` : "Contact supprimé"}
+                            </div>
+                            {contact?.role && (
+                              <div className="muted tiny">{contact.role}</div>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                            {f.myMessage && !isOpen && (
+                              <MessageSquare size={12} color="var(--primary)" />
+                            )}
+                            {f.interlocutorResponse && !isOpen && (
+                              <div style={{
+                                fontSize: 9, fontWeight: 800, padding: "2px 6px",
+                                borderRadius: 4, background: "var(--success-soft, #e8f7ee)",
+                                color: "var(--success)", letterSpacing: "0.05em",
+                              }}>RÉPONSE</div>
+                            )}
+                            <span className="muted tiny">{formatDateShort(dateStr)}</span>
+                            {hasContent && (
+                              isOpen
+                                ? <ChevronUp size={13} color="var(--muted)" />
+                                : <ChevronDown size={13} color="var(--muted)" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Aperçu du message (fermé) */}
+                        {!isOpen && f.myMessage && (
+                          <div style={{
+                            fontSize: 12, color: "var(--ink-3)", marginTop: 8,
+                            paddingLeft: 40, fontStyle: "italic",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          }}>
+                            &ldquo;{f.myMessage}&rdquo;
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Détail étendu */}
+                      {isOpen && (
+                        <div style={{ borderTop: "1px solid var(--border)", padding: "14px 14px" }}>
+                          {f.myMessage && (
+                            <div style={{ marginBottom: f.interlocutorResponse ? 14 : 0 }}>
+                              <div style={{
+                                fontSize: 10, fontWeight: 700, color: "var(--muted)",
+                                textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6,
+                              }}>
+                                Mon message
+                              </div>
+                              <div style={{
+                                fontSize: 13, color: "var(--ink)", lineHeight: 1.65,
+                                whiteSpace: "pre-wrap",
+                                background: "var(--surface-2)", padding: "10px 12px",
+                                borderRadius: "var(--r-sm)",
+                              }}>
+                                {f.myMessage}
+                              </div>
+                            </div>
+                          )}
+                          {f.interlocutorResponse && (
+                            <div>
+                              <div style={{
+                                fontSize: 10, fontWeight: 700, color: "var(--success)",
+                                textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6,
+                              }}>
+                                Réponse reçue
+                              </div>
+                              <div style={{
+                                fontSize: 13, color: "var(--ink)", lineHeight: 1.65,
+                                whiteSpace: "pre-wrap",
+                                background: "var(--success-soft, #e8f7ee)", padding: "10px 12px",
+                                borderRadius: "var(--r-sm)",
+                                borderLeft: "3px solid var(--success)",
+                              }}>
+                                {f.interlocutorResponse}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FollowupsPage() {
   const nowInit = new Date();
+  const [tab, setTab]                       = useState<"agenda" | "historique">("agenda");
   const [followups, setFollowups]           = useState<Followup[]>([]);
   const [contacts, setContacts]             = useState<Contact[]>([]);
   const [meetings, setMeetings]             = useState<Meeting[]>([]);
@@ -88,7 +322,10 @@ export default function FollowupsPage() {
   const [loadingAI, setLoadingAI]           = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget]   = useState<Contact | null>(null);
+  const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
   const { showToast } = useToast();
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   // Load from the individual endpoints that already work — never depend on /api/calendar.
   const load = useCallback(() => {
@@ -188,6 +425,50 @@ export default function FollowupsPage() {
     return ev.label || "Événement";
   }
 
+  // ── Drag & drop reschedule ──
+  function handleDragStart(e: DragStartEvent) {
+    const [type, id, contactId] = String(e.active.id).split("|");
+    let label = "";
+    if (type === "contact_followup") { const c = contactMap[contactId]; label = c ? c.firstName : "Relance"; }
+    else if (type === "followup") { const f = followups.find(x => x.id === id); const c = f?.contactId ? contactMap[f.contactId] : null; label = c ? c.firstName : "Relance"; }
+    else if (type === "meeting") { const m = meetings.find(x => x.id === id); label = m?.title ?? "Réunion"; }
+    setActiveDragLabel(label);
+  }
+
+  async function handleDragEnd(e: DragEndEvent) {
+    setActiveDragLabel(null);
+    const { active, over } = e;
+    if (!over) return;
+    const overId = String(over.id);
+    if (!overId.startsWith("day:")) return;
+    const newDate = overId.slice(4); // YYYY-MM-DD
+    const [type, id, contactId] = String(active.id).split("|");
+
+    let endpoint = "", entityId = "", body: Record<string, string> = {};
+    if (type === "contact_followup") {
+      if (contactMap[contactId]?.nextFollowupDate === newDate) return;
+      setContacts(prev => prev.map(c => c.id === contactId ? { ...c, nextFollowupDate: newDate } : c));
+      endpoint = "contacts"; entityId = contactId; body = { nextFollowupDate: newDate };
+    } else if (type === "followup") {
+      setFollowups(prev => prev.map(f => f.id === id ? { ...f, scheduledDate: newDate } : f));
+      endpoint = "followups"; entityId = id; body = { scheduledDate: newDate };
+    } else if (type === "meeting") {
+      setMeetings(prev => prev.map(m => m.id === id ? { ...m, date: newDate } : m));
+      endpoint = "meetings"; entityId = id; body = { date: newDate };
+    } else {
+      return;
+    }
+
+    const resp = await fetch(`/api/${endpoint}/${entityId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!resp.ok) { showToast("Erreur lors de la reprogrammation", "error"); load(); return; }
+    const label = type === "meeting"
+      ? (meetings.find(m => m.id === id)?.title ?? "Réunion")
+      : (contactMap[type === "contact_followup" ? contactId : (followups.find(f => f.id === id)?.contactId ?? "")]?.firstName ?? "Relance");
+    showToast(`${label} reprogrammé au ${newDate} ✓`);
+  }
+
   // "Cette semaine" — followup table entries (pending)
   const weekFollowups = followups.filter(
     f => f.status === "pending" && f.scheduledDate >= todayStr && f.scheduledDate <= nextWeekStr
@@ -284,7 +565,33 @@ export default function FollowupsPage() {
         </div>
       </div>
 
-      <div className="followups-grid">
+      <Tabs
+        tabs={[
+          { id: "agenda", label: "Agenda", icon: CalendarDays },
+          {
+            id: "historique",
+            label: "Historique",
+            icon: History,
+            badge: followups.filter(f => f.status === "completed").length > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 700,
+                background: "var(--surface-2)", color: "var(--muted)",
+                borderRadius: 10, padding: "1px 6px",
+              }}>
+                {followups.filter(f => f.status === "completed").length}
+              </span>
+            ),
+          },
+        ]}
+        activeTab={tab}
+        onChange={setTab}
+      />
+
+      {tab === "historique" && (
+        <HistoriqueTimeline followups={followups} contacts={contacts} />
+      )}
+
+      {tab === "agenda" && <div className="followups-grid">
         {/* ── Calendrier ── */}
         <div className="card card__pad-lg">
           {/* En-tête avec navigation entre mois */}
@@ -317,66 +624,82 @@ export default function FollowupsPage() {
             })}
           </div>
 
-          <div className="cal cal--events">
-            {DAY_LABELS.map((d, i) => <div key={i} className="cal__head">{d}</div>)}
-            {cells.map((day, i) => {
-              const dayEvents = day ? (eventsByDay[day] ?? []) : [];
-              const isToday = day === today;
-              const isSelected = day === selectedDay;
-              const shown = dayEvents.slice(0, 2);
-              const extra = dayEvents.length - shown.length;
-              const popDir = Math.floor(i / 7) === 0 ? "down" : "up";
-              return (
-                <div
-                  key={i}
-                  className={`cal__cell${!day ? " cal__cell--out" : ""}${isToday ? " cal__cell--today" : ""}${isSelected ? " cal__cell--selected" : ""}${dayEvents.length > 0 ? " cal__cell--has-events" : ""}`}
-                  onClick={() => day && setSelectedDay(day === selectedDay ? null : day)}
-                  style={{ cursor: day ? "pointer" : undefined }}
-                >
-                  {day && <span className="cal__day">{day}</span>}
-                  {shown.length > 0 && (
-                    <div className="cal__pills">
-                      {shown.map(ev => {
-                        const cfg = EVENT_CFG[ev.type as keyof typeof EVENT_CFG];
-                        return (
-                          <span
-                            key={ev.id}
-                            className="cal__pill"
-                            style={{ background: cfg?.color ?? "var(--muted)" }}
-                          >
-                            {eventPillLabel(ev)}
-                          </span>
-                        );
-                      })}
-                      {extra > 0 && <span className="cal__pill cal__pill--more">+{extra}</span>}
-                    </div>
-                  )}
+          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="cal cal--events">
+              {DAY_LABELS.map((d, i) => <div key={i} className="cal__head">{d}</div>)}
+              {cells.map((day, i) => {
+                if (!day) return <div key={i} className="cal__cell cal__cell--out" />;
+                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                const dayEvents = eventsByDay[day] ?? [];
+                const isToday = day === today;
+                const isSelected = day === selectedDay;
+                const shown = dayEvents.slice(0, 2);
+                const extra = dayEvents.length - shown.length;
+                const popDir = Math.floor(i / 7) === 0 ? "down" : "up";
+                return (
+                  <DayCell
+                    key={i}
+                    dateStr={dateStr}
+                    className={`cal__cell${isToday ? " cal__cell--today" : ""}${isSelected ? " cal__cell--selected" : ""}${dayEvents.length > 0 ? " cal__cell--has-events" : ""}`}
+                    onClick={() => setSelectedDay(day === selectedDay ? null : day)}
+                  >
+                    <span className="cal__day">{day}</span>
+                    {shown.length > 0 && (
+                      <div className="cal__pills">
+                        {shown.map(ev => {
+                          const cfg = EVENT_CFG[ev.type as keyof typeof EVENT_CFG];
+                          return (
+                            <DragPill
+                              key={ev.id}
+                              ev={ev}
+                              label={eventPillLabel(ev)}
+                              color={cfg?.color ?? "var(--muted)"}
+                              draggable={DRAGGABLE_TYPES.has(ev.type)}
+                            />
+                          );
+                        })}
+                        {extra > 0 && <span className="cal__pill cal__pill--more">+{extra}</span>}
+                      </div>
+                    )}
 
-                  {/* Hover popover with full detail */}
-                  {dayEvents.length > 0 && (
-                    <div className={`cal__popover cal__popover--${popDir}`}>
-                      <div className="cal__popover__date">{day} {MONTH_NAMES[month]}</div>
-                      {dayEvents.map(ev => {
-                        const cfg = EVENT_CFG[ev.type as keyof typeof EVENT_CFG];
-                        const c = ev.contactId ? contactMap[ev.contactId] : null;
-                        const detail = (ev.type === "contact_followup" || ev.type === "followup" || ev.type === "followup_done")
-                          ? (c ? `${c.firstName} ${c.lastName}${c.role ? ` · ${c.role}` : ""}` : "Relance")
-                          : ev.label;
-                        return (
-                          <div className="cal__popover__row" key={ev.id}>
-                            <span className="cal__popover__dot" style={{ background: cfg?.color ?? "var(--muted)" }} />
-                            <div style={{ minWidth: 0 }}>
-                              <div className="cal__popover__label">{detail}</div>
-                              <div className="cal__popover__type" style={{ color: cfg?.color ?? "var(--muted)" }}>{cfg?.label ?? "Événement"}</div>
+                    {/* Hover popover with full detail */}
+                    {dayEvents.length > 0 && (
+                      <div className={`cal__popover cal__popover--${popDir}`}>
+                        <div className="cal__popover__date">{day} {MONTH_NAMES[month]}</div>
+                        {dayEvents.map(ev => {
+                          const cfg = EVENT_CFG[ev.type as keyof typeof EVENT_CFG];
+                          const c = ev.contactId ? contactMap[ev.contactId] : null;
+                          const detail = (ev.type === "contact_followup" || ev.type === "followup" || ev.type === "followup_done")
+                            ? (c ? `${c.firstName} ${c.lastName}${c.role ? ` · ${c.role}` : ""}` : "Relance")
+                            : ev.label;
+                          return (
+                            <div className="cal__popover__row" key={ev.id}>
+                              <span className="cal__popover__dot" style={{ background: cfg?.color ?? "var(--muted)" }} />
+                              <div style={{ minWidth: 0 }}>
+                                <div className="cal__popover__label">{detail}</div>
+                                <div className="cal__popover__type" style={{ color: cfg?.color ?? "var(--muted)" }}>{cfg?.label ?? "Événement"}</div>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </DayCell>
+                );
+              })}
+            </div>
+
+            <DragOverlay>
+              {activeDragLabel ? (
+                <span className="cal__pill" style={{ background: "var(--primary)", boxShadow: "var(--sh-3)" }}>
+                  {activeDragLabel}
+                </span>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+
+          <div className="muted tiny" style={{ marginTop: 8, textAlign: "center" }}>
+            Astuce : glisse une relance sur un autre jour pour la reprogrammer.
           </div>
 
           {/* Detail du jour sélectionné */}
@@ -505,7 +828,7 @@ export default function FollowupsPage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Modal archivage rapide */}
       {archiveTarget && (

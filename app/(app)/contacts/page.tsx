@@ -401,12 +401,13 @@ function PrefillReader({ onNew }: { onNew: (p: ContactPrefill) => void }) {
   const params = useSearchParams();
   useEffect(() => {
     if (params.get("new") === "1") {
+      const g = (k: string) => { const v = params.get(k); return v && v.trim() ? v.trim() : undefined; };
       onNew({
-        firstName:   params.get("firstName") ?? undefined,
-        lastName:    params.get("lastName")  ?? undefined,
-        role:        params.get("role")      ?? undefined,
-        companyName: params.get("company")   ?? undefined,
-        linkedinUrl: params.get("linkedin")  ?? undefined,
+        firstName:   g("firstName"),
+        lastName:    g("lastName"),
+        role:        g("role"),
+        companyName: g("company"),
+        linkedinUrl: g("linkedin"),
       });
     }
     // run once on mount
