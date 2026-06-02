@@ -7,11 +7,12 @@ import {
 } from "@dnd-kit/core";
 import {
   Network, Users, KanbanSquare, CalendarCheck, Unlink, UserCheck,
-  Pencil, Link2, ChevronDown, ChevronUp, GripVertical,
+  Pencil, Link2, ChevronDown, ChevronUp, GripVertical, RefreshCw,
 } from "lucide-react";
 import { Badge, TempDot } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Drawer } from "@/components/ui/drawer";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ListSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/lib/store";
 import { formatDate, statusLabel, statusColor } from "@/lib/utils";
@@ -69,14 +70,15 @@ function DropZone({ id, children, className }: { id: string; children: React.Rea
 
 // ─── Company edit drawer ──────────────────────────────────────────────────────
 
-function CompanyEditDrawer({ company, sectors, onClose, onSaved }: {
-  company: Company; sectors: Sector[]; onClose: () => void; onSaved: () => void;
+function CompanyEditDrawer({ company, sectors, onClose, onSaved, onDeleted }: {
+  company: Company; sectors: Sector[]; onClose: () => void; onSaved: () => void; onDeleted: () => void;
 }) {
   const [name, setName]         = useState(company.name);
   const [sectorId, setSectorId] = useState(company.sectorId ?? "");
   const [location, setLocation] = useState(company.location ?? "");
   const [status, setStatus]     = useState(company.status);
   const [saving, setSaving]     = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const { showToast } = useToast();
 
   async function save() {
@@ -93,6 +95,15 @@ function CompanyEditDrawer({ company, sectors, onClose, onSaved }: {
     onClose();
   }
 
+  async function remove() {
+    const resp = await fetch(`/api/companies/${company.id}`, { method: "DELETE" });
+    if (!resp.ok) { showToast("Erreur lors de la suppression", "error"); return; }
+    showToast("Société supprimée");
+    setConfirmDelete(false);
+    onDeleted();
+    onClose();
+  }
+
   const STATUS_OPTS = ["to_contact","contacted","followed_up","interview","rejected","hot_opportunity"];
 
   return (
@@ -101,14 +112,19 @@ function CompanyEditDrawer({ company, sectors, onClose, onSaved }: {
       onClose={onClose}
       title={`Éditer ${company.name}`}
       footer={
-        <button className="btn btn--primary btn--full" onClick={save} disabled={saving}>
-          {saving ? "Enregistrement…" : "Enregistrer"}
-        </button>
+        <>
+          <button className="btn" style={{ color: "var(--danger)" }} onClick={() => setConfirmDelete(true)}>
+            Supprimer
+          </button>
+          <button className="btn btn--primary btn--full" onClick={save} disabled={saving}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </>
       }
     >
       <div className="field">
         <label className="label">Nom de la société</label>
-        <input className="input" value={name} onChange={e => setName(e.target.value)} />
+        <input className="input" value={name} onChange={e => setName(e.target.value)} autoFocus />
       </div>
       <div className="field">
         <label className="label">Secteur</label>
@@ -127,6 +143,13 @@ function CompanyEditDrawer({ company, sectors, onClose, onSaved }: {
           {STATUS_OPTS.map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
         </select>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message={`Supprimer « ${company.name} » ? Ses contacts, candidatures et réunions ne seront pas supprimés — ils repasseront simplement en « non reliés ».`}
+        onConfirm={remove}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </Drawer>
   );
 }
@@ -137,6 +160,7 @@ export default function OverviewPage() {
   const [data, setData]       = useState<OverviewData>({ companies: [], contacts: [], applications: [], meetings: [] });
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch]   = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeDrag, setActiveDrag] = useState<{ type: EntityType; label: string } | null>(null);
@@ -146,23 +170,31 @@ export default function OverviewPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
+  // Load each entity from its own endpoint (the same ones the working pages use),
+  // so the board never blanks out just because the combined /api/overview fails.
   const load = useCallback(async () => {
-    try {
-      const [ovRes, secRes] = await Promise.all([
-        fetch("/api/overview").then(r => r.json()),
-        fetch("/api/sectors").then(r => r.json()),
-      ]);
-      if (ovRes.data && typeof ovRes.data === "object") {
-        setData({
-          companies:    Array.isArray(ovRes.data.companies)    ? ovRes.data.companies    : [],
-          contacts:     Array.isArray(ovRes.data.contacts)     ? ovRes.data.contacts     : [],
-          applications: Array.isArray(ovRes.data.applications) ? ovRes.data.applications : [],
-          meetings:     Array.isArray(ovRes.data.meetings)     ? ovRes.data.meetings     : [],
-        });
+    setLoadError(null);
+    async function getList<T>(url: string): Promise<T[]> {
+      try {
+        const r = await fetch(url).then(res => res.json());
+        return Array.isArray(r.data) ? r.data : [];
+      } catch {
+        return [];
       }
-      setSectors(Array.isArray(secRes.data) ? secRes.data : []);
+    }
+    try {
+      const [companies, contacts, applications, meetings, secs] = await Promise.all([
+        getList<Company>("/api/companies"),
+        getList<Contact>("/api/contacts"),
+        getList<Application>("/api/applications"),
+        getList<Meeting>("/api/meetings"),
+        getList<Sector>("/api/sectors"),
+      ]);
+      setData({ companies, contacts, applications, meetings });
+      setSectors(secs);
     } catch (e) {
       console.error("[Overview] load error:", e);
+      setLoadError("Impossible de charger les données. Réessaie.");
     } finally {
       setLoading(false);
     }
@@ -268,7 +300,19 @@ export default function OverviewPage() {
         <div className="search" style={{ flex: 1 }}>
           <input placeholder="Rechercher une société…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <button className="btn" onClick={() => load()} title="Recharger les données">
+          <RefreshCw size={14} /> Actualiser
+        </button>
       </div>
+
+      {loadError && (
+        <div className="card" style={{ padding: "12px 16px", marginBottom: 16, background: "var(--danger-soft)", border: "1px solid var(--danger)" }}>
+          <div className="row gap-2" style={{ color: "var(--danger)", fontWeight: 600, fontSize: 13 }}>
+            ⚠ {loadError}
+            <button className="btn btn--sm" style={{ marginLeft: "auto" }} onClick={() => load()}>Réessayer</button>
+          </div>
+        </div>
+      )}
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
 
@@ -315,10 +359,16 @@ export default function OverviewPage() {
         {companies.length === 0 ? (
           <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--muted)" }}>
             <Network size={36} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: "var(--ink)" }}>Aucune société pour l'instant</div>
-            <div style={{ fontSize: 13 }}>
-              Crée une société en ajoutant un <a href="/contacts" style={{ color: "var(--primary)", fontWeight: 600 }}>contact</a> et en renseignant son entreprise.
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: "var(--ink)" }}>Aucune société pour l&apos;instant</div>
+            <div style={{ fontSize: 13, marginBottom: 4 }}>
+              Une société se crée depuis la fiche <a href="/contacts" style={{ color: "var(--primary)", fontWeight: 600 }}>Contact</a> :
+              ouvre un contact, déroule le champ « Société » et choisis « ＋ Nouvelle société ».
             </div>
+            {(contacts.length > 0 || applications.length > 0) && (
+              <div style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 8 }}>
+                Tu as déjà {contacts.length} contact{contacts.length !== 1 ? "s" : ""} et {applications.length} candidature{applications.length !== 1 ? "s" : ""} — ils apparaissent dans « Non reliés » ci-dessus, prêts à être rattachés à une société.
+              </div>
+            )}
           </div>
         ) : (
           <div className="overview-board">
@@ -472,6 +522,7 @@ export default function OverviewPage() {
           sectors={sectors}
           onClose={() => setEditCompany(null)}
           onSaved={load}
+          onDeleted={load}
         />
       )}
     </div>

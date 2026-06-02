@@ -3,7 +3,14 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import path from "path";
 
-const DB_PATH = process.env.DATABASE_URL ?? path.join(process.cwd(), "recherche.db");
+// Resolve to an absolute path so the DB file is the same regardless of the
+// process working directory at runtime (relative paths are fragile in Next.js).
+const RAW_DB = process.env.DATABASE_URL ?? "recherche.db";
+const DB_PATH = path.isAbsolute(RAW_DB) ? RAW_DB : path.resolve(process.cwd(), RAW_DB);
+
+if (process.env.NODE_ENV !== "production") {
+  console.log("[db] Using SQLite file:", DB_PATH);
+}
 
 const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
