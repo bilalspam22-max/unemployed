@@ -55,7 +55,12 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
     companyWebsite:   "",
   });
   const [saving, setSaving] = useState(false);
-  const [isNewCompany, setIsNewCompany] = useState(false);
+  // If a company name was pre-filled (clip / prefill) and it isn't an existing one,
+  // treat it as a NEW company from the start (mirrors the AppForm behaviour).
+  const [isNewCompany, setIsNewCompany] = useState(() => {
+    if (!initialCompanyName) return false;
+    return !(companyNames ?? []).some(n => n.toLowerCase() === initialCompanyName.toLowerCase());
+  });
 
   function up(key: string, val: unknown) { setD(prev => ({ ...prev, [key]: val })); }
 
