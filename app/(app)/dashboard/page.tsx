@@ -44,6 +44,14 @@ const EVENT_SHORT_LABEL: Record<string, string> = {
   application:      "Candidat.",
 };
 
+const EVENT_FULL_LABEL: Record<string, string> = {
+  contact_followup: "Relance",
+  followup:         "Relance",
+  followup_done:    "Relance archivée",
+  meeting:          "Réunion",
+  application:      "Candidature",
+};
+
 // Compact label for a calendar pill (first name for relances, else short type)
 function pillLabel(ev: CalendarEvent): string {
   if (ev.type.startsWith("followup") || ev.type === "contact_followup") {
@@ -151,6 +159,7 @@ function CalendarMini() {
           const dayEvents = day ? (eventsByDay[day] ?? []) : [];
           const shown = dayEvents.slice(0, 2);
           const extra = dayEvents.length - shown.length;
+          const popDir = Math.floor(i / 7) === 0 ? "down" : "up";
           return (
             <div
               key={i}
@@ -164,12 +173,28 @@ function CalendarMini() {
                       key={ev.id}
                       className="cal__pill"
                       style={{ background: EVENT_DOT_COLORS[ev.type] ?? "var(--muted)" }}
-                      title={ev.label}
                     >
                       {pillLabel(ev)}
                     </span>
                   ))}
                   {extra > 0 && <span className="cal__pill cal__pill--more">+{extra}</span>}
+                </div>
+              )}
+
+              {dayEvents.length > 0 && (
+                <div className={`cal__popover cal__popover--${popDir}`}>
+                  <div className="cal__popover__date">{day} {MONTH_NAMES[viewMonth]}</div>
+                  {dayEvents.map(ev => (
+                    <div className="cal__popover__row" key={ev.id}>
+                      <span className="cal__popover__dot" style={{ background: EVENT_DOT_COLORS[ev.type] ?? "var(--muted)" }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="cal__popover__label">{ev.label || EVENT_FULL_LABEL[ev.type] || "Événement"}</div>
+                        <div className="cal__popover__type" style={{ color: EVENT_DOT_COLORS[ev.type] ?? "var(--muted)" }}>
+                          {EVENT_FULL_LABEL[ev.type] ?? "Événement"}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

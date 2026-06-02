@@ -325,6 +325,7 @@ export default function FollowupsPage() {
               const isSelected = day === selectedDay;
               const shown = dayEvents.slice(0, 2);
               const extra = dayEvents.length - shown.length;
+              const popDir = Math.floor(i / 7) === 0 ? "down" : "up";
               return (
                 <div
                   key={i}
@@ -342,13 +343,35 @@ export default function FollowupsPage() {
                             key={ev.id}
                             className="cal__pill"
                             style={{ background: cfg?.color ?? "var(--muted)" }}
-                            title={`${cfg?.label ?? ""} — ${ev.label}`}
                           >
                             {eventPillLabel(ev)}
                           </span>
                         );
                       })}
                       {extra > 0 && <span className="cal__pill cal__pill--more">+{extra}</span>}
+                    </div>
+                  )}
+
+                  {/* Hover popover with full detail */}
+                  {dayEvents.length > 0 && (
+                    <div className={`cal__popover cal__popover--${popDir}`}>
+                      <div className="cal__popover__date">{day} {MONTH_NAMES[month]}</div>
+                      {dayEvents.map(ev => {
+                        const cfg = EVENT_CFG[ev.type as keyof typeof EVENT_CFG];
+                        const c = ev.contactId ? contactMap[ev.contactId] : null;
+                        const detail = (ev.type === "contact_followup" || ev.type === "followup" || ev.type === "followup_done")
+                          ? (c ? `${c.firstName} ${c.lastName}${c.role ? ` · ${c.role}` : ""}` : "Relance")
+                          : ev.label;
+                        return (
+                          <div className="cal__popover__row" key={ev.id}>
+                            <span className="cal__popover__dot" style={{ background: cfg?.color ?? "var(--muted)" }} />
+                            <div style={{ minWidth: 0 }}>
+                              <div className="cal__popover__label">{detail}</div>
+                              <div className="cal__popover__type" style={{ color: cfg?.color ?? "var(--muted)" }}>{cfg?.label ?? "Événement"}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
