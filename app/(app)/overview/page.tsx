@@ -85,15 +85,19 @@ const APP_STATUS_OPTS: Array<{ id: Application["status"]; label: string }> = [
   { id: "won", label: "Gagnée" },
 ];
 
-function ContactQuickEdit({ contact, onClose, onSaved }: {
-  contact: Contact; onClose: () => void; onSaved: () => void;
+function ContactQuickEdit({ contact, companies, sectors, onClose, onSaved }: {
+  contact: Contact; companies: Company[]; sectors: Sector[]; onClose: () => void; onSaved: () => void;
 }) {
   const [d, setD] = useState({
     firstName: contact.firstName, lastName: contact.lastName,
     role: contact.role ?? "", email: contact.email ?? "",
     temperature: contact.temperature ?? "cold",
     nextFollowupDate: contact.nextFollowupDate ?? "",
+    companyId: contact.companyId ?? "",
+    companyName: "",
+    companySectorId: "",
   });
+  const [isNewCompany, setIsNewCompany] = useState(false);
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
   const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
@@ -101,13 +105,19 @@ function ContactQuickEdit({ contact, onClose, onSaved }: {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    const body: Record<string, unknown> = {
+      firstName: d.firstName, lastName: d.lastName,
+      role: d.role || null, email: d.email || null,
+      temperature: d.temperature, nextFollowupDate: d.nextFollowupDate || null,
+    };
+    if (isNewCompany) {
+      body.companyName = d.companyName || null;
+      body.companySectorId = d.companySectorId || null;
+    } else {
+      body.companyId = d.companyId || null;
+    }
     const resp = await fetch(`/api/contacts/${contact.id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        firstName: d.firstName, lastName: d.lastName,
-        role: d.role || null, email: d.email || null,
-        temperature: d.temperature, nextFollowupDate: d.nextFollowupDate || null,
-      }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const json = await resp.json();
     setSaving(false);
@@ -132,6 +142,35 @@ function ContactQuickEdit({ contact, onClose, onSaved }: {
             <option value="cold">Froid</option><option value="warm">Tiède</option><option value="hot">Chaud</option>
           </select></div>
       </div>
+
+      {/* Société (existante ou nouvelle) */}
+      <div className="field">
+        <label className="label">Société</label>
+        <select
+          className="input"
+          value={isNewCompany ? "__new__" : d.companyId}
+          onChange={e => {
+            if (e.target.value === "__new__") { setIsNewCompany(true); }
+            else { setIsNewCompany(false); up("companyId", e.target.value); }
+          }}
+        >
+          <option value="">— Aucune —</option>
+          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="__new__">＋ Nouvelle société…</option>
+        </select>
+      </div>
+      {isNewCompany && (
+        <div className="form-grid">
+          <div className="field"><label className="label">Nom de la nouvelle société *</label>
+            <input className="input" value={d.companyName} onChange={e => up("companyName", e.target.value)} placeholder="Airbus, Capgemini…" /></div>
+          <div className="field"><label className="label">Secteur</label>
+            <select className="input" value={d.companySectorId} onChange={e => up("companySectorId", e.target.value)}>
+              <option value="">— Aucun —</option>
+              {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select></div>
+        </div>
+      )}
+
       <div className="form-grid">
         <div className="field"><label className="label">Email</label>
           <input className="input" type="email" value={d.email} onChange={e => up("email", e.target.value)} /></div>
@@ -662,7 +701,13 @@ export default function OverviewPage() {
       {/* Quick edit (double-click) */}
       <Modal open={!!editContact} onClose={() => setEditContact(null)} title="Éditer le contact" size="md">
         {editContact && (
-          <ContactQuickEdit contact={editContact} onClose={() => setEditContact(null)} onSaved={load} />
+          <ContactQuickEdit
+            contact={editContact}
+            companies={companies}
+            sectors={sectors}
+            onClose={() => setEditContact(null)}
+            onSaved={load}
+          />
         )}
       </Modal>
       <Modal open={!!editApp} onClose={() => setEditApp(null)} title="Éditer la candidature" size="md">
