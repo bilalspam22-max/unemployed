@@ -17,8 +17,10 @@ function q(s,r){try{return (r||document).querySelector(s);}catch(_){return null;
 function txt(e){return e?(e.textContent||"").trim().replace(/\\s+/g," "):"";}
 function meta(n){var e=q('meta[property="'+n+'"]')||q('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
 var title="",company="",url=location.href,h=location.hostname;
-var S=document.querySelectorAll('script[type="application/ld+json"]');
-for(var i=0;i<S.length;i++){try{var d=JSON.parse(S[i].textContent);var a=Array.isArray(d)?d:(d["@graph"]||[d]);for(var j=0;j<a.length;j++){var o=a[j];if(!o)continue;var ty=o["@type"];if(ty==="JobPosting"||(Array.isArray(ty)&&ty.indexOf("JobPosting")>-1)){title=o.title||title;var ho=o.hiringOrganization;if(ho)company=(typeof ho==="string"?ho:ho.name)||company;}}}catch(e){}}
+var sel=(window.getSelection?(window.getSelection()+""):"").replace(/\\r/g,"").trim();
+if(sel){var L=sel.split("\\n").map(function(x){return x.trim();}).filter(Boolean);title=L[0]||"";if(L.length>1)company=L[1]||"";}
+if(!title){var S=document.querySelectorAll('script[type="application/ld+json"]');
+for(var i=0;i<S.length;i++){try{var d=JSON.parse(S[i].textContent);var a=Array.isArray(d)?d:(d["@graph"]||[d]);for(var j=0;j<a.length;j++){var o=a[j];if(!o)continue;var ty=o["@type"];if(ty==="JobPosting"||(Array.isArray(ty)&&ty.indexOf("JobPosting")>-1)){title=o.title||title;var ho=o.hiringOrganization;if(ho&&!company)company=(typeof ho==="string"?ho:ho.name)||"";}}}catch(e){}}}
 if(h.indexOf("linkedin")>-1){
   var pane=q(".jobs-search__job-details")||q(".scaffold-layout__detail")||q(".jobs-semantic-search__job-details")||q(".job-view-layout");
   if(!title)title=txt(q(".job-details-jobs-unified-top-card__job-title",pane||document))||txt(q(".jobs-unified-top-card__job-title",pane||document));
@@ -48,8 +50,10 @@ function txt(e){return e?(e.textContent||"").trim().replace(/\\s+/g," "):"";}
 function meta(n){var e=q('meta[property="'+n+'"]')||q('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
 function stripLi(s){return (s||"").replace(/^\\(\\d+\\+?\\)\\s*/,"").replace(/\\s*[|\\u00b7]\\s*LinkedIn.*$/i,"").replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();}
 var name="",headline="";
-var og=stripLi(meta("og:title"));
-if(og){var parts=og.split(/\\s[-\\u2013\\u2014]\\s/);name=parts[0].trim();if(parts.length>1)headline=parts.slice(1).join(" - ").trim();}
+var sel=(window.getSelection?(window.getSelection()+""):"").replace(/\\r/g,"").trim();
+if(sel){var L=sel.split("\\n").map(function(x){return x.trim();}).filter(Boolean);name=L[0]||"";if(L.length>1)headline=L[1]||"";}
+if(!name){var og=stripLi(meta("og:title"));
+if(og){var parts=og.split(/\\s[-\\u2013\\u2014]\\s/);name=parts[0].trim();if(parts.length>1&&!headline)headline=parts.slice(1).join(" - ").trim();}}
 if(!name||/^linkedin$/i.test(name))name=txt(q("h1"));
 if(!name||/^linkedin$/i.test(name)){var ct=stripLi(document.title);var cp=ct.split(/\\s[-\\u2013\\u2014]\\s/);name=cp[0].trim();if(!headline&&cp.length>1)headline=cp.slice(1).join(" - ").trim();}
 if(!headline)headline=txt(q(".text-body-medium.break-words"))||txt(q(".text-body-medium"));
@@ -131,14 +135,25 @@ export default function CapturePage() {
         <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.9 }}>
           <li><strong>Affiche ta barre de favoris</strong> (Chrome/Edge : <kbd>Ctrl/⌘ + Shift + B</kbd>).</li>
           <li><strong>Glisse</strong> un des deux boutons ci-dessous dans ta barre de favoris.</li>
-          <li>Sur une <strong>offre LinkedIn/Indeed</strong> (ou un profil), clique le favori → le formulaire s&apos;ouvre <strong>pré-rempli</strong> → tu cliques Enregistrer 🎉.</li>
+          <li>Sur l&apos;offre (ou le profil), <strong>surligne avec ta souris</strong> le texte à capturer, puis clique le favori.</li>
+          <li>Le formulaire s&apos;ouvre <strong>pré-rempli</strong> → tu cliques Enregistrer 🎉.</li>
         </ol>
+
+        <div style={{ marginTop: 14, padding: "12px 14px", background: "var(--primary-soft)", borderRadius: "var(--r-md)", fontSize: 12.5, color: "var(--primary-ink)" }}>
+          <strong>💡 Astuce sélection (le plus fiable) :</strong>
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
+            <li><strong>Candidature</strong> : surligne le <strong>titre du poste</strong> (et, si tu veux, mets la <strong>société sur la 2ᵉ ligne</strong> de ta sélection).</li>
+            <li><strong>Contact</strong> : surligne le <strong>nom de la personne</strong> (et son <strong>poste/société</strong> sur la 2ᵉ ligne si tu veux).</li>
+          </ul>
+          La sélection est lue en priorité → ça marche à coup sûr, même sur LinkedIn. Sans sélection, l&apos;appli essaie quand même de deviner automatiquement.
+        </div>
+
         <div className="row gap-2" style={{ marginTop: 12, fontSize: 12, color: "var(--muted)" }}>
           <MousePointerClick size={13} /> 100% gratuit, aucune installation, aucune donnée envoyée à un tiers — le favori ouvre directement ton appli.
         </div>
         <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--warn-soft)", borderRadius: "var(--r-md)", fontSize: 12.5, color: "#95571a" }}>
-          <strong>Tu avais déjà ajouté un favori ?</strong> Le code a été amélioré (v2) pour mieux capturer les profils LinkedIn.
-          Supprime l&apos;ancien favori et glisse à nouveau le bouton ci-dessous. Pense aussi à attendre que la page LinkedIn soit bien chargée avant de cliquer.
+          <strong>Tu avais déjà ajouté un favori ?</strong> Le code a changé (v3 — capture par sélection).
+          Supprime tes anciens favoris et glisse à nouveau les boutons ci-dessous, sinon tu utilises l&apos;ancien code.
         </div>
       </div>
 
@@ -147,7 +162,7 @@ export default function CapturePage() {
         {/* Job */}
         <div className="card card__pad-lg">
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Clipper une offre</div>
-          <div className="muted tiny" style={{ marginBottom: 14 }}>Titre, société et lien capturés automatiquement → nouvelle candidature.</div>
+          <div className="muted tiny" style={{ marginBottom: 14 }}>Surligne le titre du poste → nouvelle candidature pré-remplie (lien + date du jour inclus).</div>
           {jobBm && <BookmarkletLink href={jobBm} label="📋 Clip → Candidature" icon={Briefcase} color="var(--primary)" />}
           <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => copy(jobBm, "job")} disabled={!jobBm}>
             {copied === "job" ? <><Check size={12} /> Copié</> : <><Copy size={12} /> Copier le code</>}
@@ -157,7 +172,7 @@ export default function CapturePage() {
         {/* Contact */}
         <div className="card card__pad-lg">
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Clipper un contact</div>
-          <div className="muted tiny" style={{ marginBottom: 14 }}>Sur un profil LinkedIn : nom, rôle, société et URL → nouveau contact.</div>
+          <div className="muted tiny" style={{ marginBottom: 14 }}>Surligne le nom (et son poste sur la 2ᵉ ligne) → nouveau contact pré-rempli avec l&apos;URL du profil.</div>
           {contactBm && <BookmarkletLink href={contactBm} label="👤 Clip → Contact" icon={UserPlus} color="var(--success)" />}
           <button className="btn btn--sm" style={{ marginTop: 10 }} onClick={() => copy(contactBm, "contact")} disabled={!contactBm}>
             {copied === "contact" ? <><Check size={12} /> Copié</> : <><Copy size={12} /> Copier le code</>}
