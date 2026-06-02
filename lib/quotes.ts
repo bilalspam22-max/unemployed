@@ -75,3 +75,14 @@ export function getDailyQuote(): Quote {
   const idx = dailySeed(today) % QUOTES.length;
   return QUOTES[idx];
 }
+
+export const QUOTES_COUNT = QUOTES.length;
+
+// Random quote, optionally avoiding the previous index (for rotation).
+export function getRandomQuote(exceptIndex?: number): { quote: Quote; index: number } {
+  let idx = Math.floor(Math.random() * QUOTES.length);
+  if (exceptIndex !== undefined && QUOTES.length > 1) {
+    while (idx === exceptIndex) idx = Math.floor(Math.random() * QUOTES.length);
+  }
+  return { quote: QUOTES[idx], index: idx };
+}

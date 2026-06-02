@@ -3,6 +3,7 @@ import {
   text,
   integer,
   real,
+  blob,
   sqliteTable,
 } from "drizzle-orm/sqlite-core";
 
@@ -120,6 +121,18 @@ export const cvs = sqliteTable("cv", {
   createdAt:           integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
+// Uploaded CV PDF stored as a BLOB (included in DB backups, served via authed route)
+export const cvFiles = sqliteTable("cv_file", {
+  id:        text("id").primaryKey(),
+  cvId:      text("cvId").notNull().references(() => cvs.id, { onDelete: "cascade" }),
+  userId:    text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  fileName:  text("fileName").notNull(),
+  mimeType:  text("mimeType").notNull().default("application/pdf"),
+  size:      integer("size").notNull().default(0),
+  data:      blob("data").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
 export const applications = sqliteTable("application", {
   id:               text("id").primaryKey(),
   userId:           text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -135,6 +148,7 @@ export const applications = sqliteTable("application", {
   sentDate:         text("sentDate"),
   nextAction:       text("nextAction"),
   feedbackReceived: text("feedbackReceived"),
+  sourceUrl:        text("sourceUrl"),   // Lien de l'offre (clipper/capture)
   sentVia:          text("sentVia", { enum: ["email", "linkedin", "referral", "direct"] }).default("email"),
   createdAt:        integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt:        integer("updatedAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),

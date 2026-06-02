@@ -38,8 +38,8 @@ const TYPE_CFG = {
 
 // ─── Draggable chip ───────────────────────────────────────────────────────────
 
-function DraggableItem({ dragId, type, children }: {
-  dragId: string; type: EntityType; children: React.ReactNode;
+function DraggableItem({ dragId, type, children, onDoubleClick }: {
+  dragId: string; type: EntityType; children: React.ReactNode; onDoubleClick?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: dragId });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
@@ -48,6 +48,8 @@ function DraggableItem({ dragId, type, children }: {
       ref={setNodeRef}
       style={style}
       className={`ov-item ov-item--${type} ${isDragging ? "is-dragging" : ""}`}
+      title={onDoubleClick ? "Double-cliquer pour éditer" : undefined}
+      onDoubleClick={onDoubleClick}
       {...attributes}
       {...listeners}
     >
@@ -69,6 +71,135 @@ function DropZone({ id, children, className }: { id: string; children: React.Rea
 }
 
 // ─── Company edit drawer ──────────────────────────────────────────────────────
+
+// ─── Quick edit modals (double-click on an item) ──────────────────────────────
+
+const APP_STATUS_OPTS: Array<{ id: Application["status"]; label: string }> = [
+  { id: "to_prepare", label: "À préparer" },
+  { id: "cv_sent", label: "CV envoyé" },
+  { id: "followup_planned", label: "Relance prévue" },
+  { id: "in_discussion", label: "En discussion" },
+  { id: "interview", label: "Entretien" },
+  { id: "waiting", label: "En attente" },
+  { id: "rejected", label: "Refus" },
+  { id: "won", label: "Gagnée" },
+];
+
+function ContactQuickEdit({ contact, onClose, onSaved }: {
+  contact: Contact; onClose: () => void; onSaved: () => void;
+}) {
+  const [d, setD] = useState({
+    firstName: contact.firstName, lastName: contact.lastName,
+    role: contact.role ?? "", email: contact.email ?? "",
+    temperature: contact.temperature ?? "cold",
+    nextFollowupDate: contact.nextFollowupDate ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
+  const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const resp = await fetch(`/api/contacts/${contact.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: d.firstName, lastName: d.lastName,
+        role: d.role || null, email: d.email || null,
+        temperature: d.temperature, nextFollowupDate: d.nextFollowupDate || null,
+      }),
+    });
+    const json = await resp.json();
+    setSaving(false);
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur", "error"); return; }
+    showToast("Contact mis à jour ✓");
+    onSaved(); onClose();
+  }
+
+  return (
+    <form onSubmit={save}>
+      <div className="form-grid">
+        <div className="field"><label className="label">Prénom *</label>
+          <input className="input" value={d.firstName} onChange={e => up("firstName", e.target.value)} required autoFocus /></div>
+        <div className="field"><label className="label">Nom *</label>
+          <input className="input" value={d.lastName} onChange={e => up("lastName", e.target.value)} required /></div>
+      </div>
+      <div className="form-grid">
+        <div className="field"><label className="label">Rôle</label>
+          <input className="input" value={d.role} onChange={e => up("role", e.target.value)} placeholder="DRH, CTO…" /></div>
+        <div className="field"><label className="label">Température</label>
+          <select className="input" value={d.temperature} onChange={e => up("temperature", e.target.value)}>
+            <option value="cold">Froid</option><option value="warm">Tiède</option><option value="hot">Chaud</option>
+          </select></div>
+      </div>
+      <div className="form-grid">
+        <div className="field"><label className="label">Email</label>
+          <input className="input" type="email" value={d.email} onChange={e => up("email", e.target.value)} /></div>
+        <div className="field"><label className="label">Prochaine relance</label>
+          <input className="input" type="date" value={d.nextFollowupDate} onChange={e => up("nextFollowupDate", e.target.value)} /></div>
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="submit" className="btn btn--primary" disabled={saving}>{saving ? "…" : "Enregistrer"}</button>
+      </div>
+    </form>
+  );
+}
+
+function ApplicationQuickEdit({ application, onClose, onSaved }: {
+  application: Application; onClose: () => void; onSaved: () => void;
+}) {
+  const [d, setD] = useState({
+    jobTitle: application.jobTitle,
+    status: application.status,
+    sentDate: application.sentDate ?? "",
+    sourceUrl: application.sourceUrl ?? "",
+    nextAction: application.nextAction ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
+  const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const resp = await fetch(`/api/applications/${application.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jobTitle: d.jobTitle, status: d.status,
+        sentDate: d.sentDate || null, sourceUrl: d.sourceUrl || null, nextAction: d.nextAction || null,
+      }),
+    });
+    const json = await resp.json();
+    setSaving(false);
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur", "error"); return; }
+    showToast("Candidature mise à jour ✓");
+    onSaved(); onClose();
+  }
+
+  return (
+    <form onSubmit={save}>
+      <div className="field"><label className="label">Intitulé du poste *</label>
+        <input className="input" value={d.jobTitle} onChange={e => up("jobTitle", e.target.value)} required autoFocus /></div>
+      <div className="form-grid">
+        <div className="field"><label className="label">Statut</label>
+          <select className="input" value={d.status} onChange={e => up("status", e.target.value)}>
+            {APP_STATUS_OPTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select></div>
+        <div className="field"><label className="label">Date d&apos;envoi</label>
+          <input className="input" type="date" value={d.sentDate} onChange={e => up("sentDate", e.target.value)} /></div>
+      </div>
+      <div className="field"><label className="label">Lien de l&apos;offre</label>
+        <input className="input" value={d.sourceUrl} onChange={e => up("sourceUrl", e.target.value)} placeholder="https://…" /></div>
+      <div className="field"><label className="label">Prochaine action</label>
+        <input className="input" value={d.nextAction} onChange={e => up("nextAction", e.target.value)} placeholder="Relancer le…" /></div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="submit" className="btn btn--primary" disabled={saving}>{saving ? "…" : "Enregistrer"}</button>
+      </div>
+    </form>
+  );
+}
 
 function CompanyEditDrawer({ company, sectors, onClose, onSaved, onDeleted }: {
   company: Company; sectors: Sector[]; onClose: () => void; onSaved: () => void; onDeleted: () => void;
@@ -166,6 +297,8 @@ export default function OverviewPage() {
   const [activeDrag, setActiveDrag] = useState<{ type: EntityType; label: string } | null>(null);
   const [linkPicker, setLinkPicker] = useState<{ type: EntityType; id: string } | null>(null);
   const [editCompany, setEditCompany] = useState<Company | null>(null);
+  const [editContact, setEditContact] = useState<Contact | null>(null);
+  const [editApp, setEditApp] = useState<Application | null>(null);
   const { showToast } = useToast();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -325,7 +458,7 @@ export default function OverviewPage() {
             </div>
             <div className="ov-tray__items">
               {orphanContacts.map(c => (
-                <DraggableItem key={c.id} dragId={`contact:${c.id}`} type="contact">
+                <DraggableItem key={c.id} dragId={`contact:${c.id}`} type="contact" onDoubleClick={() => setEditContact(c)}>
                   <TempDot temp={c.temperature} />
                   <span className="ov-item__label">{c.firstName} {c.lastName}</span>
                   <button className="ov-item__link" title="Relier à une société" onClick={() => setLinkPicker({ type: "contact", id: c.id })}>
@@ -334,7 +467,7 @@ export default function OverviewPage() {
                 </DraggableItem>
               ))}
               {orphanApplications.map(a => (
-                <DraggableItem key={a.id} dragId={`application:${a.id}`} type="application">
+                <DraggableItem key={a.id} dragId={`application:${a.id}`} type="application" onDoubleClick={() => setEditApp(a)}>
                   <KanbanSquare size={12} color="var(--success)" />
                   <span className="ov-item__label">{a.jobTitle}</span>
                   <button className="ov-item__link" title="Relier à une société" onClick={() => setLinkPicker({ type: "application", id: a.id })}>
@@ -411,7 +544,7 @@ export default function OverviewPage() {
                         <div className="ov-section__title"><Users size={11} /> Contacts ({cc.length})</div>
                         {cc.length === 0 && <div className="ov-empty">Glisse un contact ici</div>}
                         {cc.map(c => (
-                          <DraggableItem key={c.id} dragId={`contact:${c.id}`} type="contact">
+                          <DraggableItem key={c.id} dragId={`contact:${c.id}`} type="contact" onDoubleClick={() => setEditContact(c)}>
                             <TempDot temp={c.temperature} />
                             <span className="ov-item__label">{c.firstName} {c.lastName}{c.role ? ` · ${c.role}` : ""}</span>
                             <button className="ov-item__link" title="Détacher" onClick={() => linkEntity("contact", c.id, null)}>
@@ -429,7 +562,7 @@ export default function OverviewPage() {
                           const resp = a.contactId ? contacts.find(c => c.id === a.contactId) : null;
                           return (
                             <div key={a.id} className="ov-app">
-                              <DraggableItem dragId={`application:${a.id}`} type="application">
+                              <DraggableItem dragId={`application:${a.id}`} type="application" onDoubleClick={() => setEditApp(a)}>
                                 <KanbanSquare size={12} color="var(--success)" />
                                 <span className="ov-item__label">{a.jobTitle}</span>
                                 <Badge tone={statusColor(a.status) as "info" | "success" | "warn" | "danger" | "neutral" | "plum"}>{statusLabel(a.status)}</Badge>
@@ -525,6 +658,18 @@ export default function OverviewPage() {
           onDeleted={load}
         />
       )}
+
+      {/* Quick edit (double-click) */}
+      <Modal open={!!editContact} onClose={() => setEditContact(null)} title="Éditer le contact" size="md">
+        {editContact && (
+          <ContactQuickEdit contact={editContact} onClose={() => setEditContact(null)} onSaved={load} />
+        )}
+      </Modal>
+      <Modal open={!!editApp} onClose={() => setEditApp(null)} title="Éditer la candidature" size="md">
+        {editApp && (
+          <ApplicationQuickEdit application={editApp} onClose={() => setEditApp(null)} onSaved={load} />
+        )}
+      </Modal>
     </div>
   );
 }

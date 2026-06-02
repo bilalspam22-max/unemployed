@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, Send, Star, History, ChevronDown, ChevronUp, MessageSquare, MessageCircleReply } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { TempDot, Badge } from "@/components/ui/badge";
@@ -218,7 +219,7 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button type="button" className="btn" onClick={onClose}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
-          {saving ? "Enregistrement…" : initial ? "Mettre à jour" : "Créer"}
+          {saving ? "Enregistrement…" : initial?.id ? "Mettre à jour" : "Créer"}
         </button>
       </div>
     </form>
@@ -392,6 +393,28 @@ function ContactHistory({ contactId }: { contactId: string }) {
   );
 }
 
+// ─── Prefill reader (clipper / capture) ───────────────────────────────────────
+
+interface ContactPrefill { firstName?: string; lastName?: string; role?: string; companyName?: string; linkedinUrl?: string }
+
+function PrefillReader({ onNew }: { onNew: (p: ContactPrefill) => void }) {
+  const params = useSearchParams();
+  useEffect(() => {
+    if (params.get("new") === "1") {
+      onNew({
+        firstName:   params.get("firstName") ?? undefined,
+        lastName:    params.get("lastName")  ?? undefined,
+        role:        params.get("role")      ?? undefined,
+        companyName: params.get("company")   ?? undefined,
+        linkedinUrl: params.get("linkedin")  ?? undefined,
+      });
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ContactsPage() {
@@ -400,6 +423,7 @@ export default function ContactsPage() {
   const [companyMap, setCompanyMap] = useState<Record<string, string>>({});
   const [selected, setSelected]   = useState<Contact | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [prefill, setPrefill]     = useState<ContactPrefill | null>(null);
   const [filter, setFilter]       = useState<Filter>("all");
   const [search, setSearch]       = useState("");
   const [aiMessages, setAiMessages] = useState<Array<{ tone: string; toneLabel: string; message: string }> | null>(null);
@@ -537,12 +561,16 @@ export default function ContactsPage() {
 
   return (
     <div className="main__inner">
+      <Suspense fallback={null}>
+        <PrefillReader onNew={p => { setPrefill(p); setShowCreate(true); }} />
+      </Suspense>
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">Contacts</h1>
           <p className="page-head__sub">{contacts.length} contacts dans votre réseau</p>
         </div>
-        <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
+        <button className="btn btn--primary" onClick={() => { setPrefill(null); setShowCreate(true); }}>
           <Plus size={14} /> Nouveau contact
         </button>
       </div>
@@ -742,10 +770,13 @@ export default function ContactsPage() {
       )}
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau contact" size="lg">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setPrefill(null); }} title="Nouveau contact" size="lg">
         <ContactForm
+          key={prefill ? "prefilled" : "blank"}
+          initial={prefill ? { firstName: prefill.firstName, lastName: prefill.lastName, role: prefill.role, linkedinUrl: prefill.linkedinUrl } : undefined}
+          initialCompanyName={prefill?.companyName}
           onSubmit={handleCreate}
-          onClose={() => setShowCreate(false)}
+          onClose={() => { setShowCreate(false); setPrefill(null); }}
           sectors={sectors}
           companyNames={Object.values(companyMap)}
         />

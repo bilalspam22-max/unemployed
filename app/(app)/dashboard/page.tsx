@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { Bell, TrendingUp, Flame, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { TrendingUp, Flame, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Donut } from "@/components/ui/donut";
 import { TempDot } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { InsightsPanel } from "@/components/ui/insights-panel";
 import { KpiGridSkeleton } from "@/components/ui/skeleton";
 import { formatDateShort } from "@/lib/utils";
-import { getDailyQuote } from "@/lib/quotes";
+import { getRandomQuote } from "@/lib/quotes";
 import type { Contact, Insight, CalendarEvent, Followup, Meeting, Application } from "@/lib/types";
 import { useSession } from "@/lib/auth-client";
 
@@ -205,6 +205,35 @@ function CalendarMini() {
   );
 }
 
+// Rotating motivational quote — changes every 12s, click to advance.
+function MotivationQuote() {
+  const [state, setState] = useState(() => getRandomQuote());
+  const [fading, setFading] = useState(false);
+
+  const next = useCallback(() => {
+    setFading(true);
+    setTimeout(() => {
+      setState(prev => getRandomQuote(prev.index));
+      setFading(false);
+    }, 240);
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(next, 12000);
+    return () => clearInterval(t);
+  }, [next]);
+
+  return (
+    <div className="quote-card" style={{ marginTop: 24 }} onClick={next} title="Cliquer pour une autre citation">
+      <RefreshCw size={13} className="quote-card__refresh" />
+      <div className={`quote-card__inner ${fading ? "is-fading" : ""}`}>
+        <p className="quote-card__text">{state.quote.text}</p>
+        <div className="quote-card__author">— {state.quote.author}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -230,7 +259,6 @@ export default function DashboardPage() {
 
   const name = session?.user?.name?.split(" ")[0] ?? "Bilal";
   const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const quote = getDailyQuote();
 
   // Streak tone
   const streakTone = !streak || streak.current === 0
@@ -255,9 +283,6 @@ export default function DashboardPage() {
               {streak.current} jour{streak.current > 1 ? "s" : ""} d'activité
             </span>
           )}
-          <button className="btn">
-            <Bell size={14} /> Rappels
-          </button>
         </div>
       </div>
 
@@ -368,11 +393,8 @@ export default function DashboardPage() {
         <CalendarMini />
       </div>
 
-      {/* Citation motivante du jour */}
-      <div className="quote-card" style={{ marginTop: 24 }}>
-        {quote.text}
-        <div className="quote-card__author">— {quote.author}</div>
-      </div>
+      {/* Citation motivante (rotative) */}
+      <MotivationQuote />
     </div>
   );
 }

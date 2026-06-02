@@ -18,6 +18,7 @@ import {
   Network,
   ChevronDown,
   ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { useSidebar } from "@/lib/store";
 import { useSession } from "@/lib/auth-client";
@@ -36,6 +37,7 @@ async function handleSignOut() {
 
 const NAV_BEFORE = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+  { href: "/capture",   label: "Capture rapide",  icon: Sparkles },
 ];
 
 // Overview is a parent group: clicking the label navigates, the chevron toggles its sub-tabs.

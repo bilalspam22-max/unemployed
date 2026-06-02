@@ -4,11 +4,15 @@ import { db } from "@/lib/db";
 import { applications } from "@/lib/db/schema";
 import { requireAuth, ok, err } from "@/lib/api-helpers";
 import { generateId } from "@/lib/utils";
+import { resolveCompanyId } from "@/app/api/contacts/company-resolver";
 import { z } from "zod";
 
 const createSchema = z.object({
   jobTitle:         z.string().min(1),
   companyId:        z.string().nullable().optional(),
+  // Inline company creation (clipper / capture) — find-or-create by name
+  companyName:      z.string().nullable().optional(),
+  companySectorId:  z.string().nullable().optional(),
   contactId:        z.string().nullable().optional(),
   sectorId:         z.string().nullable().optional(),
   cvUsedId:         z.string().nullable().optional(),
@@ -17,6 +21,7 @@ const createSchema = z.object({
   sentDate:         z.string().nullable().optional(),
   nextAction:       z.string().nullable().optional(),
   feedbackReceived: z.string().nullable().optional(),
+  sourceUrl:        z.string().nullable().optional(),
   sentVia:          z.enum(["email","linkedin","referral","direct"]).nullable().optional(),
 });
 
@@ -33,10 +38,17 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.message);
+
+  const { companyName, companySectorId, companyId, ...rest } = parsed.data;
+  const resolvedCompanyId = await resolveCompanyId(
+    session!.user.id, companyName, companySectorId, null, null, companyId,
+  );
+
   const row = await db.insert(applications).values({
-    id:     generateId(),
-    userId: session!.user.id,
-    ...parsed.data,
+    id:        generateId(),
+    userId:    session!.user.id,
+    companyId: resolvedCompanyId,
+    ...rest,
   }).returning();
   return ok(row[0], 201);
 }

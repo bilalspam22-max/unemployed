@@ -111,6 +111,7 @@ export interface Application {
   sentDate: string | null;
   nextAction: string | null;
   feedbackReceived: string | null;
+  sourceUrl?: string | null;
   sentVia: SentVia | null;
   createdAt: Date | null;
   updatedAt: Date | null;

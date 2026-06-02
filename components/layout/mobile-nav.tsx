@@ -14,6 +14,7 @@ import {
   GraduationCap,
   CalendarCheck,
   Network,
+  Sparkles,
   X,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ const MAIN_ITEMS = [
 ];
 
 const MORE_ITEMS = [
+  { href: "/capture",    label: "Capture",     icon: Sparkles },
   { href: "/meetings",   label: "Réunions",    icon: CalendarCheck },
   { href: "/sectors",    label: "Secteurs",    icon: Layers },
   { href: "/cvs",        label: "CV",          icon: FileText },

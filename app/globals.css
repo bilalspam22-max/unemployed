@@ -352,6 +352,32 @@ input, textarea, select { font: inherit; color: inherit; }
   padding: 14px 10px 6px 10px;
 }
 
+/* Bookmarklet draggable button (Capture page) */
+.capture-bm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px 9px 9px;
+  background: var(--surface-2);
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: grab;
+  text-decoration: none;
+  user-select: none;
+  transition: transform .12s ease, box-shadow .15s ease;
+}
+.capture-bm:hover { transform: translateY(-1px); box-shadow: var(--sh-2); }
+.capture-bm:active { cursor: grabbing; }
+.capture-bm__icon {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+
 /* Nav parent (Overview group) */
 .nav-parent {
   display: flex;
@@ -942,6 +968,22 @@ input, textarea, select { font: inherit; color: inherit; }
    ============================================================ */
 
 .cv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+/* PDF drag & drop zone (CV form) */
+.cv-dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: 18px 16px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.cv-dropzone:hover { border-color: var(--primary); }
+.cv-dropzone.is-over {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
 .cv-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2452,35 +2494,57 @@ body { font-variant-numeric: tabular-nums; }
 
 /* ──── Daily quote card ──── */
 .quote-card {
-  padding: 20px 24px;
+  padding: 26px 28px 22px 56px;
   border-radius: var(--r-lg);
   background: linear-gradient(135deg, var(--surface), var(--surface-2));
   border: 1px solid var(--border);
-  font-style: italic;
   color: var(--ink-2);
-  line-height: 1.6;
-  font-size: 14px;
   max-width: 560px;
   position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  transition: box-shadow .2s ease, border-color .2s ease;
 }
+.quote-card:hover { box-shadow: var(--sh-2); border-color: var(--border-strong); }
 .quote-card::before {
   content: "“";
   position: absolute;
-  top: -8px;
-  left: 16px;
-  font-size: 48px;
+  top: 6px;
+  left: 18px;
+  font-size: 52px;
   line-height: 1;
-  font-style: normal;
   color: var(--primary);
-  opacity: 0.3;
+  opacity: 0.28;
   font-family: Georgia, serif;
 }
+.quote-card__refresh {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: var(--ink-3);
+  opacity: 0;
+  transition: opacity .2s ease, transform .4s ease;
+}
+.quote-card:hover .quote-card__refresh { opacity: 0.7; }
+.quote-card:active .quote-card__refresh { transform: rotate(180deg); }
+.quote-card__inner {
+  transition: opacity .24s ease, transform .24s ease;
+}
+.quote-card__inner.is-fading { opacity: 0; transform: translateY(6px); }
+.quote-card__text {
+  margin: 0;
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink);
+}
 .quote-card__author {
-  margin-top: 10px;
+  margin-top: 12px;
   font-style: normal;
   font-size: 12px;
-  color: var(--ink-3);
-  font-weight: 600;
+  color: var(--primary);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 /* ============================================================

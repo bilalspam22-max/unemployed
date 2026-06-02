@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Plus, Download, FileText } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Plus, Download, FileText, UploadCloud, X } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Drawer } from "@/components/ui/drawer";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -51,7 +51,7 @@ function CVCard({ cv, sector, onClick }: { cv: CV; sector: Sector | undefined; o
 
 function CVForm({ sectors, onSubmit, onClose, initial }: {
   sectors: Sector[];
-  onSubmit: (d: Partial<CV>) => Promise<void>;
+  onSubmit: (d: Partial<CV>, file: File | null) => Promise<void>;
   onClose: () => void;
   initial?: Partial<CV>;
 }) {
@@ -63,8 +63,19 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
     mainKeywords:         (initial?.mainKeywords ?? []).join(", "),
     strengthsToHighlight: (initial?.strengthsToHighlight ?? []).join("\n"),
   });
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
+
+  const hasExistingFile = !!initial?.pdfUrl && initial.pdfUrl.startsWith("/api/cvs/");
+
+  function pickFile(f: File | null | undefined) {
+    if (!f) return;
+    if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) return;
+    setFile(f);
+  }
 
   async function handle(e: React.FormEvent) {
     e.preventDefault();
@@ -73,10 +84,11 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
       sectorId:    d.sectorId || null,
       versionNumber: d.versionNumber,
       lastUpdated:  d.lastUpdated || null,
+      // Keep manual URL only if the user typed one; uploads set pdfUrl server-side
       pdfUrl:       d.pdfUrl || null,
       mainKeywords:         d.mainKeywords.split(",").map(k => k.trim()).filter(Boolean),
       strengthsToHighlight: d.strengthsToHighlight.split("\n").map(s => s.trim()).filter(Boolean),
-    });
+    }, file);
     setSaving(false);
     onClose();
   }
@@ -96,14 +108,56 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
           <input className="input" type="number" min={1} value={d.versionNumber} onChange={e => up("versionNumber", parseInt(e.target.value))} />
         </div>
       </div>
+
+      {/* ── PDF upload (drag & drop depuis le disque) ── */}
+      <div className="field">
+        <label className="label">Document PDF</label>
+        <div
+          className={`cv-dropzone ${dragOver ? "is-over" : ""}`}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); pickFile(e.dataTransfer.files?.[0]); }}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            style={{ display: "none" }}
+            onChange={e => pickFile(e.target.files?.[0])}
+          />
+          {file ? (
+            <div className="row gap-2" style={{ justifyContent: "center", alignItems: "center" }}>
+              <FileText size={16} color="var(--primary)" />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{file.name}</span>
+              <span className="muted tiny">({Math.round(file.size / 1024)} Ko)</span>
+              <button type="button" className="btn btn--ghost btn--icon" onClick={e => { e.stopPropagation(); setFile(null); }}>
+                <X size={13} />
+              </button>
+            </div>
+          ) : hasExistingFile ? (
+            <div className="row gap-2" style={{ justifyContent: "center", alignItems: "center" }}>
+              <FileText size={16} color="var(--success)" />
+              <span style={{ fontSize: 13 }}>PDF déjà importé — dépose un fichier pour le remplacer</span>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center" }}>
+              <UploadCloud size={22} color="var(--muted)" style={{ marginBottom: 6 }} />
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Glisse ton PDF ici</div>
+              <div className="muted tiny">ou clique pour parcourir ton disque (max 10 Mo)</div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="form-grid">
         <div className="field">
           <label className="label">Dernière mise à jour</label>
           <input className="input" type="date" value={d.lastUpdated} onChange={e => up("lastUpdated", e.target.value)} />
         </div>
         <div className="field">
-          <label className="label">URL PDF</label>
-          <input className="input" value={d.pdfUrl} onChange={e => up("pdfUrl", e.target.value)} placeholder="https://..." />
+          <label className="label">Ou lien externe (optionnel)</label>
+          <input className="input" value={d.pdfUrl.startsWith("/api/cvs/") ? "" : d.pdfUrl} onChange={e => up("pdfUrl", e.target.value)} placeholder="https://..." />
         </div>
       </div>
       <div className="field">
@@ -117,7 +171,7 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button type="button" className="btn" onClick={onClose}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
-          {saving ? "Enregistrement…" : initial ? "Mettre à jour" : "Créer"}
+          {saving ? "Enregistrement…" : initial?.id ? "Mettre à jour" : "Créer"}
         </button>
       </div>
     </form>
@@ -133,23 +187,45 @@ export default function CVsPage() {
   const { showToast } = useToast();
 
   const load = useCallback(() => {
-    fetch("/api/cvs").then(r => r.json()).then(r => setCvList(r.data ?? []));
-    fetch("/api/sectors").then(r => r.json()).then(r => setSectors(r.data ?? []));
+    fetch("/api/cvs").then(r => r.json()).then(r => setCvList(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    fetch("/api/sectors").then(r => r.json()).then(r => setSectors(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleCreate(data: Partial<CV>) {
+  // Upload a PDF to a CV; returns the updated pdfUrl or null on failure.
+  async function uploadFile(cvId: string, file: File): Promise<string | null> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const resp = await fetch(`/api/cvs/${cvId}/file`, { method: "POST", body: fd });
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Échec de l'upload du PDF", "error"); return null; }
+    return json.data.pdfUrl as string;
+  }
+
+  async function handleCreate(data: Partial<CV>, file: File | null) {
     const resp = await fetch("/api/cvs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: created } = await resp.json();
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la création", "error"); return; }
+    let created: CV = json.data;
+    if (file) {
+      const pdfUrl = await uploadFile(created.id, file);
+      if (pdfUrl) created = { ...created, pdfUrl };
+    }
     setCvList(prev => [created, ...prev]);
     showToast("CV créé ✓");
   }
 
-  async function handleUpdate(data: Partial<CV>) {
+  async function handleUpdate(data: Partial<CV>, file: File | null) {
     if (!selected) return;
     const resp = await fetch(`/api/cvs/${selected.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const { data: updated } = await resp.json();
+    const json = await resp.json();
+    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la mise à jour", "error"); return; }
+    let updated: CV = json.data;
+    if (file) {
+      const pdfUrl = await uploadFile(updated.id, file);
+      if (pdfUrl) updated = { ...updated, pdfUrl };
+    }
     setCvList(prev => prev.map(c => c.id === updated.id ? updated : c));
     setSelected(updated);
     showToast("CV mis à jour ✓");

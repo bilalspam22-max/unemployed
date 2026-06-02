@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Plus, Calendar } from "lucide-react";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Plus, Calendar, ExternalLink } from "lucide-react";
 import { KanbanBoard } from "@/components/ui/kanban";
 import { StatusBadge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/drawer";
@@ -12,6 +13,10 @@ import { useToast } from "@/lib/store";
 import { celebrate } from "@/lib/confetti";
 import { formatDateShort } from "@/lib/utils";
 import type { Application, Company, Sector, CV } from "@/lib/types";
+
+interface AppFormData extends Partial<Application> {
+  companyName?: string | null;
+}
 
 const COLUMNS = [
   { id: "to_prepare",       title: "À préparer",     dotColor: "var(--ink-3)"  },
@@ -44,25 +49,34 @@ function AppCard({ app, companies }: { app: Application; companies: Company[] })
   );
 }
 
-function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
+function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial, initialCompanyName }: {
   companies: Company[];
   sectors: Sector[];
   cvList: CV[];
-  onSubmit: (d: Partial<Application>) => Promise<void>;
+  onSubmit: (d: AppFormData) => Promise<void>;
   onClose: () => void;
   initial?: Partial<Application>;
+  initialCompanyName?: string;
 }) {
+  // Resolve a prefilled company name against existing companies
+  const matched = initialCompanyName
+    ? companies.find(c => c.name.toLowerCase() === initialCompanyName.toLowerCase())
+    : null;
+
   const [d, setD] = useState({
     jobTitle:     initial?.jobTitle    ?? "",
-    companyId:    initial?.companyId   ?? "",
+    companyId:    initial?.companyId   ?? matched?.id ?? "",
+    companyName:  matched ? "" : (initialCompanyName ?? ""),
     sectorId:     initial?.sectorId    ?? "",
     cvUsedId:     initial?.cvUsedId    ?? "",
     sentDate:     initial?.sentDate    ?? "",
+    sourceUrl:    initial?.sourceUrl   ?? "",
     messageSent:  initial?.messageSent ?? "",
     sentVia:      initial?.sentVia     ?? "email",
     status:       initial?.status      ?? "to_prepare",
     nextAction:   initial?.nextAction  ?? "",
   });
+  const [isNewCompany, setIsNewCompany] = useState(!!initialCompanyName && !matched);
   const [saving, setSaving] = useState(false);
   const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
 
@@ -70,11 +84,15 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
     e.preventDefault();
     setSaving(true);
     await onSubmit({
-      ...d,
-      companyId: d.companyId || null,
-      sectorId:  d.sectorId  || null,
-      cvUsedId:  d.cvUsedId  || null,
-      sentDate:  d.sentDate  || null,
+      jobTitle:    d.jobTitle,
+      status:      d.status as Application["status"],
+      sentVia:     d.sentVia as Application["sentVia"],
+      companyId:   isNewCompany ? null : (d.companyId || null),
+      companyName: isNewCompany ? (d.companyName || null) : undefined,
+      sectorId:    d.sectorId  || null,
+      cvUsedId:    d.cvUsedId  || null,
+      sentDate:    d.sentDate  || null,
+      sourceUrl:   d.sourceUrl || null,
       messageSent: d.messageSent || null,
       nextAction:  d.nextAction  || null,
     });
@@ -86,14 +104,23 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
     <form onSubmit={handle}>
       <div className="field">
         <label className="label">Intitulé du poste *</label>
-        <input className="input" value={d.jobTitle} onChange={e => up("jobTitle", e.target.value)} required />
+        <input className="input" value={d.jobTitle} onChange={e => up("jobTitle", e.target.value)} required autoFocus />
       </div>
+
       <div className="form-grid">
         <div className="field">
           <label className="label">Entreprise</label>
-          <select className="input" value={d.companyId} onChange={e => up("companyId", e.target.value)}>
+          <select
+            className="input"
+            value={isNewCompany ? "__new__" : d.companyId}
+            onChange={e => {
+              if (e.target.value === "__new__") { setIsNewCompany(true); }
+              else { setIsNewCompany(false); up("companyId", e.target.value); }
+            }}
+          >
             <option value="">— Choisir —</option>
             {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="__new__">＋ Nouvelle société…</option>
           </select>
         </div>
         <div className="field">
@@ -104,6 +131,25 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
           </select>
         </div>
       </div>
+
+      {isNewCompany && (
+        <div className="field">
+          <label className="label">Nom de la nouvelle société *</label>
+          <input
+            className="input"
+            value={d.companyName}
+            onChange={e => up("companyName", e.target.value)}
+            placeholder="Airbus, Capgemini…"
+          />
+          <span className="muted tiny" style={{ marginTop: 3 }}>Sera créée et liée automatiquement.</span>
+        </div>
+      )}
+
+      <div className="field">
+        <label className="label">Lien de l&apos;offre</label>
+        <input className="input" value={d.sourceUrl} onChange={e => up("sourceUrl", e.target.value)} placeholder="https://linkedin.com/jobs/…" />
+      </div>
+
       <div className="form-grid">
         <div className="field">
           <label className="label">CV utilisé</label>
@@ -113,7 +159,7 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
           </select>
         </div>
         <div className="field">
-          <label className="label">Date d'envoi</label>
+          <label className="label">Date d&apos;envoi</label>
           <input className="input" type="date" value={d.sentDate} onChange={e => up("sentDate", e.target.value)} />
         </div>
       </div>
@@ -145,11 +191,32 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial }: {
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button type="button" className="btn" onClick={onClose}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
-          {saving ? "Enregistrement…" : initial ? "Mettre à jour" : "Créer"}
+          {saving ? "Enregistrement…" : initial?.id ? "Mettre à jour" : "Créer"}
         </button>
       </div>
     </form>
   );
+}
+
+// Reads ?new=1&title=&company=&url=&via= and opens a prefilled create modal.
+// Wrapped in <Suspense> by the page (Next.js 16 requires it for useSearchParams).
+interface AppPrefill { jobTitle?: string; companyName?: string; sourceUrl?: string; sentVia?: string }
+
+function PrefillReader({ onNew }: { onNew: (p: AppPrefill) => void }) {
+  const params = useSearchParams();
+  useEffect(() => {
+    if (params.get("new") === "1") {
+      onNew({
+        jobTitle:    params.get("title")   ?? undefined,
+        companyName: params.get("company") ?? undefined,
+        sourceUrl:   params.get("url")     ?? undefined,
+        sentVia:     params.get("via")     ?? undefined,
+      });
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
 }
 
 export default function ApplicationsPage() {
@@ -159,6 +226,7 @@ export default function ApplicationsPage() {
   const [cvList, setCvList]       = useState<CV[]>([]);
   const [selected, setSelected]   = useState<Application | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [prefill, setPrefill]     = useState<AppPrefill | null>(null);
   const [aiAction, setAiAction]   = useState<string | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -192,21 +260,24 @@ export default function ApplicationsPage() {
     }
   }
 
-  async function handleCreate(data: Partial<Application>) {
+  async function handleCreate(data: AppFormData) {
     const resp = await fetch("/api/applications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     const json = await resp.json();
     if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la création", "error"); return; }
     setApps(prev => [json.data, ...prev]);
-    showToast("Candidature créée ✓");
+    if (data.companyName) load(); // refresh companies list if a new one was created
+    celebrate();
+    showToast("🎉 Candidature ajoutée !");
   }
 
-  async function handleUpdate(data: Partial<Application>) {
+  async function handleUpdate(data: AppFormData) {
     if (!selected) return;
     const resp = await fetch(`/api/applications/${selected.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     const json = await resp.json();
     if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la mise à jour", "error"); return; }
     setApps(prev => prev.map(a => a.id === json.data.id ? json.data : a));
     setSelected(json.data);
+    if (data.companyName) load();
     showToast("Candidature mise à jour ✓");
   }
 
@@ -241,14 +312,23 @@ export default function ApplicationsPage() {
 
   const companyMap = Object.fromEntries(companies.map(c => [c.id, c]));
 
+  function openPrefilled(p: AppPrefill) {
+    setPrefill(p);
+    setShowCreate(true);
+  }
+
   return (
     <div className="main__inner--wide main__inner">
+      <Suspense fallback={null}>
+        <PrefillReader onNew={openPrefilled} />
+      </Suspense>
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">Candidatures</h1>
           <p className="page-head__sub">{apps.length} candidatures suivies</p>
         </div>
-        <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
+        <button className="btn btn--primary" onClick={() => { setPrefill(null); setShowCreate(true); }}>
           <Plus size={14} /> Nouvelle candidature
         </button>
       </div>
@@ -285,9 +365,14 @@ export default function ApplicationsPage() {
           <div>
             <StatusBadge status={selected.status} />
 
-            <div className="row gap-4" style={{ marginTop: 12 }}>
+            <div className="row gap-4" style={{ marginTop: 12, flexWrap: "wrap" }}>
               {selected.sentDate && <span className="muted tiny"><Calendar size={11} /> {formatDateShort(selected.sentDate)}</span>}
               {selected.sentVia && <span className="badge badge--neutral">{selected.sentVia}</span>}
+              {selected.sourceUrl && (
+                <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" className="badge badge--info" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <ExternalLink size={11} /> Voir l&apos;offre
+                </a>
+              )}
             </div>
 
             {/* AI action */}
@@ -336,8 +421,17 @@ export default function ApplicationsPage() {
         </Drawer>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouvelle candidature" size="lg">
-        <AppForm companies={companies} sectors={sectors} cvList={cvList} onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setPrefill(null); }} title="Nouvelle candidature" size="lg">
+        <AppForm
+          key={prefill ? "prefilled" : "blank"}
+          companies={companies}
+          sectors={sectors}
+          cvList={cvList}
+          initial={prefill ? { jobTitle: prefill.jobTitle, sourceUrl: prefill.sourceUrl, sentVia: (prefill.sentVia as Application["sentVia"]) ?? undefined } : undefined}
+          initialCompanyName={prefill?.companyName}
+          onSubmit={handleCreate}
+          onClose={() => { setShowCreate(false); setPrefill(null); }}
+        />
       </Modal>
 
       <ConfirmDialog
