@@ -36,6 +36,22 @@ const EVENT_DOT_COLORS: Record<string, string> = {
   application:      "var(--warn)",
 };
 
+const EVENT_SHORT_LABEL: Record<string, string> = {
+  contact_followup: "Relance",
+  followup:         "Relance",
+  followup_done:    "Relance",
+  meeting:          "Réunion",
+  application:      "Candidat.",
+};
+
+// Compact label for a calendar pill (first name for relances, else short type)
+function pillLabel(ev: CalendarEvent): string {
+  if (ev.type.startsWith("followup") || ev.type === "contact_followup") {
+    return ev.label?.split(" ")[0] || "Relance";
+  }
+  return ev.label || EVENT_SHORT_LABEL[ev.type] || "Événement";
+}
+
 function CalendarMini() {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
@@ -100,31 +116,33 @@ function CalendarMini() {
           <ChevronRight size={16} />
         </button>
       </div>
-      <div className="cal">
+      <div className="cal cal--events">
         {DAY_LABELS.map((d, i) => (
           <div key={`h-${i}`} className="cal__head">{d}</div>
         ))}
         {cells.map((day, i) => {
           const dayEvents = day ? (eventsByDay[day] ?? []) : [];
-          const dotTypes = [...new Set(dayEvents.map(e => e.type))].slice(0, 3);
+          const shown = dayEvents.slice(0, 2);
+          const extra = dayEvents.length - shown.length;
           return (
             <div
               key={i}
-              className={`cal__cell${!day ? " cal__cell--out" : ""}${day === today ? " cal__cell--today" : ""}`}
+              className={`cal__cell${!day ? " cal__cell--out" : ""}${day === today ? " cal__cell--today" : ""}${dayEvents.length > 0 ? " cal__cell--has-events" : ""}`}
             >
               {day && <span className="cal__day">{day}</span>}
-              {dotTypes.length > 0 && (
-                <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 1 }}>
-                  {dotTypes.map(type => (
-                    <div
-                      key={type}
-                      style={{
-                        width: 4, height: 4, borderRadius: "50%",
-                        background: EVENT_DOT_COLORS[type] ?? "var(--muted)",
-                        flexShrink: 0,
-                      }}
-                    />
+              {shown.length > 0 && (
+                <div className="cal__pills">
+                  {shown.map(ev => (
+                    <span
+                      key={ev.id}
+                      className="cal__pill"
+                      style={{ background: EVENT_DOT_COLORS[ev.type] ?? "var(--muted)" }}
+                      title={ev.label}
+                    >
+                      {pillLabel(ev)}
+                    </span>
                   ))}
+                  {extra > 0 && <span className="cal__pill cal__pill--more">+{extra}</span>}
                 </div>
               )}
             </div>

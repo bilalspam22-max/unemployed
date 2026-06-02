@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -15,6 +16,8 @@ import {
   Shield,
   CalendarCheck,
   Network,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useSidebar } from "@/lib/store";
 import { useSession } from "@/lib/auth-client";
@@ -31,15 +34,26 @@ async function handleSignOut() {
   window.location.href = "/login";
 }
 
-const NAV_ITEMS = [
-  { href: "/dashboard",    label: "Tableau de bord",  icon: LayoutDashboard },
-  { href: "/overview",     label: "Overview",          icon: Network },
-  { href: "/sectors",      label: "Secteurs",         icon: Layers },
-  { href: "/contacts",     label: "Contacts",         icon: Users },
-  { href: "/applications", label: "Candidatures",     icon: KanbanSquare },
-  { href: "/meetings",     label: "Réunions",         icon: CalendarCheck },
-  { href: "/cvs",          label: "CV par secteur",   icon: FileText },
-  { href: "/followups",    label: "Relances",         icon: Bell },
+const NAV_BEFORE = [
+  { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+];
+
+// Overview is a parent group: clicking the label navigates, the chevron toggles its sub-tabs.
+const OVERVIEW_GROUP = {
+  href: "/overview",
+  label: "Overview",
+  icon: Network,
+  children: [
+    { href: "/sectors",      label: "Secteurs",     icon: Layers },
+    { href: "/contacts",     label: "Contacts",     icon: Users },
+    { href: "/applications", label: "Candidatures", icon: KanbanSquare },
+  ],
+};
+
+const NAV_AFTER = [
+  { href: "/meetings",  label: "Réunions",       icon: CalendarCheck },
+  { href: "/cvs",       label: "CV par secteur", icon: FileText },
+  { href: "/followups", label: "Relances",       icon: Bell },
 ];
 
 const PHASE2_ITEMS = [
@@ -54,10 +68,18 @@ export function Sidebar() {
   const isDemo = useIsDemo();
   const demoSuffix = isDemo ? "?demo=true" : "";
 
+  const isInOverviewSection =
+    pathname === "/overview" ||
+    OVERVIEW_GROUP.children.some(c => pathname === c.href || pathname.startsWith(c.href + "/"));
+  const [overviewOpen, setOverviewOpen] = useState(isInOverviewSection);
+
   const initials = user ? getInitials(
     user.name?.split(" ")[0] ?? "U",
     user.name?.split(" ")[1] ?? "sr"
   ) : "?";
+
+  const isActive = (href: string) =>
+    pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
 
   return (
     <aside className="sidebar" style={{ width: collapsed ? 68 : 240, minWidth: collapsed ? 68 : 240 }}>
@@ -84,17 +106,54 @@ export function Sidebar() {
 
       {/* Main nav */}
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
-          return (
-            <Link key={href} href={`${href}${demoSuffix}`} className={`nav-item ${active ? "nav-item--active" : ""}`}>
-              <span className="nav-item__icon">
-                <Icon size={16} strokeWidth={1.75} />
-              </span>
-              {!collapsed && <span>{label}</span>}
-            </Link>
-          );
-        })}
+        {NAV_BEFORE.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={`${href}${demoSuffix}`} className={`nav-item ${isActive(href) ? "nav-item--active" : ""}`}>
+            <span className="nav-item__icon"><Icon size={16} strokeWidth={1.75} /></span>
+            {!collapsed && <span>{label}</span>}
+          </Link>
+        ))}
+
+        {/* Overview group */}
+        {collapsed ? (
+          // Collapsed: render Overview + its children as flat icons
+          <>
+            {[OVERVIEW_GROUP, ...OVERVIEW_GROUP.children].map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={`${href}${demoSuffix}`} title={label} className={`nav-item ${isActive(href) ? "nav-item--active" : ""}`}>
+                <span className="nav-item__icon"><Icon size={16} strokeWidth={1.75} /></span>
+              </Link>
+            ))}
+          </>
+        ) : (
+          <>
+            <div className={`nav-item nav-parent ${pathname === "/overview" ? "nav-item--active" : ""}`} style={{ padding: 0 }}>
+              <Link href={`/overview${demoSuffix}`} className="nav-parent__main">
+                <span className="nav-item__icon"><Network size={16} strokeWidth={1.75} /></span>
+                <span>Overview</span>
+              </Link>
+              <button
+                className="nav-parent__chevron"
+                onClick={() => setOverviewOpen(o => !o)}
+                title={overviewOpen ? "Replier" : "Déplier"}
+                aria-expanded={overviewOpen}
+              >
+                {overviewOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+              </button>
+            </div>
+            {overviewOpen && OVERVIEW_GROUP.children.map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={`${href}${demoSuffix}`} className={`nav-item nav-item--child ${isActive(href) ? "nav-item--active" : ""}`}>
+                <span className="nav-item__icon"><Icon size={15} strokeWidth={1.75} /></span>
+                <span>{label}</span>
+              </Link>
+            ))}
+          </>
+        )}
+
+        {NAV_AFTER.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={`${href}${demoSuffix}`} className={`nav-item ${isActive(href) ? "nav-item--active" : ""}`}>
+            <span className="nav-item__icon"><Icon size={16} strokeWidth={1.75} /></span>
+            {!collapsed && <span>{label}</span>}
+          </Link>
+        ))}
       </div>
 
       {/* Phase 2 */}

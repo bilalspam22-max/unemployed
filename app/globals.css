@@ -351,6 +351,41 @@ input, textarea, select { font: inherit; color: inherit; }
   font-weight: 600;
   padding: 14px 10px 6px 10px;
 }
+
+/* Nav parent (Overview group) */
+.nav-parent {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.nav-parent__main {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  padding: 9px 10px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--r-md) 0 0 var(--r-md);
+  min-width: 0;
+}
+.nav-parent__chevron {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  transition: background .15s ease, color .15s ease;
+}
+.nav-parent__chevron:hover { background: var(--surface-3); color: var(--ink); }
+.nav-item--child {
+  padding-left: 30px;
+  font-size: 13px;
+}
+.nav-item--child .nav-item__icon { opacity: 0.85; }
 .nav__user {
   margin-top: auto;
   display: flex;
@@ -1007,6 +1042,39 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .cal__ev--warn    { background: var(--warn-soft);    color: #95571a; }
 .cal__ev--success { background: var(--success-soft); color: #1d7a52; }
+
+/* Event-pill calendar variant (named relances/meetings/applications) */
+.cal--events .cal__cell {
+  aspect-ratio: auto;
+  min-height: 60px;
+  padding: 5px;
+  gap: 3px;
+}
+.cal__cell--has-events { background: var(--surface-3); }
+.cal__cell--has-events.cal__cell--selected { background: var(--primary-soft); }
+.cal__pills {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+.cal__pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.45;
+  max-width: 100%;
+}
+.cal__pill--more {
+  background: var(--surface-2) !important;
+  color: var(--ink-2);
+}
 
 /* ============================================================
    Temperature dots

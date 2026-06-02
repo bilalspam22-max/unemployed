@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { CheckCircle2, Send, User } from "lucide-react";
+import { CheckCircle2, Send, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/lib/store";
@@ -75,9 +75,12 @@ function QuickArchiveModal({ contact, onArchive, onClose }: {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FollowupsPage() {
+  const nowInit = new Date();
   const [followups, setFollowups]           = useState<Followup[]>([]);
   const [contacts, setContacts]             = useState<Contact[]>([]);
   const [calEvents, setCalEvents]           = useState<CalendarEvent[]>([]);
+  const [viewYear, setViewYear]             = useState(nowInit.getFullYear());
+  const [viewMonth, setViewMonth]           = useState(nowInit.getMonth());
   const [selectedDay, setSelectedDay]       = useState<number | null>(null);
   const [aiMessages, setAiMessages]         = useState<Array<{ tone: string; toneLabel: string; message: string }> | null>(null);
   const [loadingAI, setLoadingAI]           = useState(false);
@@ -94,9 +97,12 @@ export default function FollowupsPage() {
   useEffect(() => { load(); }, [load]);
 
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();    // 0-indexed
-  const today = now.getDate();
+  // Calendar grid follows the navigated month/year…
+  const year = viewYear;
+  const month = viewMonth;          // 0-indexed
+  // …but "today" highlight only applies when viewing the actual current month.
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  const today = isCurrentMonth ? now.getDate() : -1;
   const todayStr = now.toISOString().slice(0, 10);
   const nextWeekStr = new Date(now.getTime() + 7 * 86400000).toISOString().slice(0, 10);
 
@@ -107,6 +113,22 @@ export default function FollowupsPage() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
+  function prevMonth() {
+    setSelectedDay(null);
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  }
+  function nextMonth() {
+    setSelectedDay(null);
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  }
+  function goToday() {
+    setSelectedDay(null);
+    setViewYear(now.getFullYear());
+    setViewMonth(now.getMonth());
+  }
+
   // Group calendar events by day — parse YYYY-MM-DD without UTC drift
   const eventsByDay: Record<number, CalendarEvent[]> = {};
   calEvents.forEach(ev => {
@@ -116,6 +138,17 @@ export default function FollowupsPage() {
       eventsByDay[d].push(ev);
     }
   });
+
+  // Short label for an event pill in a calendar cell
+  function eventPillLabel(ev: CalendarEvent): string {
+    if (ev.type === "contact_followup" || ev.type === "followup" || ev.type === "followup_done") {
+      const c = ev.contactId ? contactMap[ev.contactId] : null;
+      return c ? c.firstName : "Relance";
+    }
+    if (ev.type === "meeting") return ev.label || "Réunion";
+    if (ev.type === "application") return ev.label || "Candidature";
+    return ev.label || "Événement";
+  }
 
   // "Cette semaine" — followup table entries (pending)
   const weekFollowups = followups.filter(
@@ -216,8 +249,21 @@ export default function FollowupsPage() {
       <div className="followups-grid">
         {/* ── Calendrier ── */}
         <div className="card card__pad-lg">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>
-            {MONTH_NAMES[month]} {year}
+          {/* En-tête avec navigation entre mois */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <button className="btn btn--ghost btn--icon" onClick={prevMonth} title="Mois précédent">
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={goToday}
+              style={{ fontWeight: 700, fontSize: 15, background: "none", border: "none", cursor: "pointer", color: "var(--ink)", padding: "2px 8px", borderRadius: "var(--r-sm)" }}
+              title="Revenir au mois actuel"
+            >
+              {MONTH_NAMES[month]} {year}
+            </button>
+            <button className="btn btn--ghost btn--icon" onClick={nextMonth} title="Mois suivant">
+              <ChevronRight size={16} />
+            </button>
           </div>
 
           {/* Légende */}
@@ -233,32 +279,38 @@ export default function FollowupsPage() {
             })}
           </div>
 
-          <div className="cal">
+          <div className="cal cal--events">
             {DAY_LABELS.map((d, i) => <div key={i} className="cal__head">{d}</div>)}
             {cells.map((day, i) => {
               const dayEvents = day ? (eventsByDay[day] ?? []) : [];
               const isToday = day === today;
               const isSelected = day === selectedDay;
-              const dotTypes = [...new Set(dayEvents.map(e => e.type))].slice(0, 3);
+              const shown = dayEvents.slice(0, 2);
+              const extra = dayEvents.length - shown.length;
               return (
                 <div
                   key={i}
-                  className={`cal__cell${!day ? " cal__cell--out" : ""}${isToday ? " cal__cell--today" : ""}${isSelected ? " cal__cell--selected" : ""}`}
+                  className={`cal__cell${!day ? " cal__cell--out" : ""}${isToday ? " cal__cell--today" : ""}${isSelected ? " cal__cell--selected" : ""}${dayEvents.length > 0 ? " cal__cell--has-events" : ""}`}
                   onClick={() => day && setSelectedDay(day === selectedDay ? null : day)}
                   style={{ cursor: day ? "pointer" : undefined }}
                 >
                   {day && <span className="cal__day">{day}</span>}
-                  {dotTypes.length > 0 && (
-                    <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 2 }}>
-                      {dotTypes.map(type => (
-                        <div
-                          key={type}
-                          style={{
-                            width: 6, height: 6, borderRadius: "50%",
-                            background: EVENT_CFG[type as keyof typeof EVENT_CFG]?.color ?? "var(--muted)",
-                          }}
-                        />
-                      ))}
+                  {shown.length > 0 && (
+                    <div className="cal__pills">
+                      {shown.map(ev => {
+                        const cfg = EVENT_CFG[ev.type as keyof typeof EVENT_CFG];
+                        return (
+                          <span
+                            key={ev.id}
+                            className="cal__pill"
+                            style={{ background: cfg?.color ?? "var(--muted)" }}
+                            title={`${cfg?.label ?? ""} — ${ev.label}`}
+                          >
+                            {eventPillLabel(ev)}
+                          </span>
+                        );
+                      })}
+                      {extra > 0 && <span className="cal__pill cal__pill--more">+{extra}</span>}
                     </div>
                   )}
                 </div>
