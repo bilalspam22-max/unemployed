@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Bell, TrendingUp, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Donut } from "@/components/ui/donut";
@@ -10,7 +10,7 @@ import { InsightsPanel } from "@/components/ui/insights-panel";
 import { KpiGridSkeleton } from "@/components/ui/skeleton";
 import { formatDateShort } from "@/lib/utils";
 import { getDailyQuote } from "@/lib/quotes";
-import type { Contact, Insight, CalendarEvent } from "@/lib/types";
+import type { Contact, Insight, CalendarEvent, Followup, Meeting, Application } from "@/lib/types";
 import { useSession } from "@/lib/auth-client";
 
 interface StreakData { current: number; best: number; lastActivity: string | null; }
@@ -56,14 +56,41 @@ function CalendarMini() {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [contacts, setContacts]         = useState<Contact[]>([]);
+  const [followups, setFollowups]       = useState<Followup[]>([]);
+  const [meetings, setMeetings]         = useState<Meeting[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
 
+  // Build calendar events from the individual endpoints (never depend on /api/calendar).
   useEffect(() => {
-    fetch("/api/calendar")
-      .then(r => r.json())
-      .then(r => setEvents(Array.isArray(r.data) ? r.data : []))
-      .catch(() => {});
+    const getList = (url: string, set: (v: never[]) => void) =>
+      fetch(url).then(r => r.json()).then(r => set(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    getList("/api/contacts", setContacts as never);
+    getList("/api/followups", setFollowups as never);
+    getList("/api/meetings", setMeetings as never);
+    getList("/api/applications", setApplications as never);
   }, []);
+
+  const events: CalendarEvent[] = useMemo(() => {
+    const evs: CalendarEvent[] = [];
+    for (const f of followups) {
+      evs.push({
+        id: f.id, date: f.scheduledDate,
+        type: f.status === "completed" ? "followup_done" : "followup",
+        label: f.myMessage ? f.myMessage.slice(0, 40) : "Relance", contactId: f.contactId,
+      });
+    }
+    for (const c of contacts) {
+      if (c.nextFollowupDate) evs.push({ id: `cfup-${c.id}`, date: c.nextFollowupDate, type: "contact_followup", label: `${c.firstName} ${c.lastName}`, contactId: c.id });
+    }
+    for (const m of meetings) {
+      if (m.date) evs.push({ id: m.id, date: m.date, type: "meeting", label: m.title });
+    }
+    for (const a of applications) {
+      if (a.sentDate) evs.push({ id: a.id, date: a.sentDate, type: "application", label: a.jobTitle });
+    }
+    return evs;
+  }, [contacts, followups, meetings, applications]);
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -79,10 +106,10 @@ function CalendarMini() {
 
   const MONTH_NAMES = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
-  // Group events by day — parse YYYY-MM-DD without UTC offset drift
+  // Group events by day — parse YYYY-MM-DD without UTC offset drift (strip any time part)
   const eventsByDay: Record<number, CalendarEvent[]> = {};
   events.forEach(ev => {
-    const [evY, evM, evD] = ev.date.split("-").map(Number);
+    const [evY, evM, evD] = ev.date.slice(0, 10).split("-").map(Number);
     if (evY === viewYear && evM === viewMonth + 1) {
       if (!eventsByDay[evD]) eventsByDay[evD] = [];
       eventsByDay[evD].push(ev);

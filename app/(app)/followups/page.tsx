@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { CheckCircle2, Send, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/lib/store";
 import { formatDateShort } from "@/lib/utils";
-import type { Followup, Contact, CalendarEvent } from "@/lib/types";
+import type { Followup, Contact, Meeting, Application, CalendarEvent } from "@/lib/types";
 
 // ─── Event type config ────────────────────────────────────────────────────────
 
@@ -18,9 +18,10 @@ const EVENT_CFG = {
   application:      { color: "var(--warn)", bg: "var(--warn-soft)", label: "Candidature" },
 } as const;
 
-// Parse "YYYY-MM-DD" without timezone offset (avoids UTC midnight drift)
+// Parse "YYYY-MM-DD" (or an ISO datetime) without timezone offset (avoids UTC drift)
 function parseLocalDate(iso: string): { y: number; m: number; d: number } {
-  const [y, m, d] = iso.split("-").map(Number);
+  const datePart = iso.slice(0, 10); // strip any "T..." time portion
+  const [y, m, d] = datePart.split("-").map(Number);
   return { y, m, d };
 }
 
@@ -78,7 +79,8 @@ export default function FollowupsPage() {
   const nowInit = new Date();
   const [followups, setFollowups]           = useState<Followup[]>([]);
   const [contacts, setContacts]             = useState<Contact[]>([]);
-  const [calEvents, setCalEvents]           = useState<CalendarEvent[]>([]);
+  const [meetings, setMeetings]             = useState<Meeting[]>([]);
+  const [applications, setApplications]     = useState<Application[]>([]);
   const [viewYear, setViewYear]             = useState(nowInit.getFullYear());
   const [viewMonth, setViewMonth]           = useState(nowInit.getMonth());
   const [selectedDay, setSelectedDay]       = useState<number | null>(null);
@@ -88,13 +90,49 @@ export default function FollowupsPage() {
   const [archiveTarget, setArchiveTarget]   = useState<Contact | null>(null);
   const { showToast } = useToast();
 
+  // Load from the individual endpoints that already work — never depend on /api/calendar.
   const load = useCallback(() => {
-    fetch("/api/followups").then(r => r.json()).then(r => setFollowups(Array.isArray(r.data) ? r.data : [])).catch(() => {});
-    fetch("/api/contacts").then(r => r.json()).then(r => setContacts(Array.isArray(r.data) ? r.data : [])).catch(() => {});
-    fetch("/api/calendar").then(r => r.json()).then(r => setCalEvents(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    const getList = (url: string, set: (v: never[]) => void) =>
+      fetch(url).then(r => r.json()).then(r => set(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    getList("/api/followups", setFollowups as never);
+    getList("/api/contacts", setContacts as never);
+    getList("/api/meetings", setMeetings as never);
+    getList("/api/applications", setApplications as never);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Build the calendar events client-side from the loaded data.
+  const calEvents: CalendarEvent[] = useMemo(() => {
+    const evs: CalendarEvent[] = [];
+    for (const f of followups) {
+      evs.push({
+        id: f.id,
+        date: f.scheduledDate,
+        type: f.status === "completed" ? "followup_done" : "followup",
+        label: f.myMessage ? f.myMessage.slice(0, 40) : "Relance",
+        contactId: f.contactId,
+      });
+    }
+    for (const c of contacts) {
+      if (c.nextFollowupDate) {
+        evs.push({
+          id: `cfup-${c.id}`,
+          date: c.nextFollowupDate,
+          type: "contact_followup",
+          label: `${c.firstName} ${c.lastName}`,
+          contactId: c.id,
+        });
+      }
+    }
+    for (const m of meetings) {
+      if (m.date) evs.push({ id: m.id, date: m.date, type: "meeting", label: m.title });
+    }
+    for (const a of applications) {
+      if (a.sentDate) evs.push({ id: a.id, date: a.sentDate, type: "application", label: a.jobTitle });
+    }
+    return evs;
+  }, [followups, contacts, meetings, applications]);
 
   const now = new Date();
   // Calendar grid follows the navigated month/year…
@@ -172,7 +210,7 @@ export default function FollowupsPage() {
     ? `${year}-${String(month + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`
     : null;
   const selectedDayEvents = selectedDayStr
-    ? calEvents.filter(ev => ev.date === selectedDayStr)
+    ? calEvents.filter(ev => ev.date.slice(0, 10) === selectedDayStr)
     : [];
 
   async function markDone(f: Followup) {
