@@ -54,6 +54,7 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
     companyWebsite:   "",
   });
   const [saving, setSaving] = useState(false);
+  const [isNewCompany, setIsNewCompany] = useState(false);
 
   function up(key: string, val: unknown) { setD(prev => ({ ...prev, [key]: val })); }
 
@@ -125,44 +126,53 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
         Entreprise
       </div>
       <div className="field">
-        <label className="label">Nom de l'entreprise</label>
-        <input
+        <label className="label">Société</label>
+        <select
           className="input"
-          list="company-names-list"
-          value={d.companyName}
-          onChange={e => up("companyName", e.target.value)}
-          placeholder="Airbus, Capgemini, startup XYZ…"
-        />
-        {companyNames && companyNames.length > 0 && (
-          <datalist id="company-names-list">
-            {companyNames.map(n => <option key={n} value={n} />)}
-          </datalist>
-        )}
-        <span className="muted tiny" style={{ marginTop: 3 }}>
-          {d.companyName && companyNames?.includes(d.companyName)
-            ? "✓ Entreprise existante — sera liée automatiquement"
-            : d.companyName
-              ? "Nouvelle entreprise — sera créée automatiquement"
-              : "Laisse vide si inconnu"}
-        </span>
+          value={isNewCompany ? "__new__" : d.companyName}
+          onChange={e => {
+            if (e.target.value === "__new__") {
+              setIsNewCompany(true);
+              up("companyName", "");
+            } else {
+              setIsNewCompany(false);
+              up("companyName", e.target.value);
+            }
+          }}
+        >
+          <option value="">— Aucune —</option>
+          {(companyNames ?? []).map(n => <option key={n} value={n}>{n}</option>)}
+          <option value="__new__">＋ Nouvelle société…</option>
+        </select>
       </div>
-      <div className="form-grid">
-        <div className="field">
-          <label className="label">Secteur</label>
-          <select className="input" value={d.companySectorId} onChange={e => up("companySectorId", e.target.value)}>
-            <option value="">— Aucun —</option>
-            {(sectors ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+
+      {isNewCompany && (
+        <div style={{ padding: "12px 14px", background: "var(--surface-2)", borderRadius: "var(--r-md)", marginBottom: 16, border: "1px solid var(--border)" }}>
+          <div className="field">
+            <label className="label">Nom de la nouvelle société *</label>
+            <input
+              className="input"
+              value={d.companyName}
+              onChange={e => up("companyName", e.target.value)}
+              placeholder="Airbus, Capgemini, startup XYZ…"
+              autoFocus
+            />
+          </div>
+          <div className="form-grid">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">Secteur</label>
+              <select className="input" value={d.companySectorId} onChange={e => up("companySectorId", e.target.value)}>
+                <option value="">— Aucun —</option>
+                {(sectors ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">Localisation</label>
+              <input className="input" value={d.companyLocation} onChange={e => up("companyLocation", e.target.value)} placeholder="Paris, Remote…" />
+            </div>
+          </div>
         </div>
-        <div className="field">
-          <label className="label">Localisation</label>
-          <input className="input" value={d.companyLocation} onChange={e => up("companyLocation", e.target.value)} placeholder="Paris, Lyon, Remote…" />
-        </div>
-      </div>
-      <div className="field">
-        <label className="label">Site web</label>
-        <input className="input" value={d.companyWebsite} onChange={e => up("companyWebsite", e.target.value)} placeholder="https://…" />
-      </div>
+      )}
 
       {/* ── Suivi ── */}
       <div className="divider" style={{ margin: "16px 0 12px" }} />

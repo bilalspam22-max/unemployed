@@ -636,6 +636,159 @@ input, textarea, select { font: inherit; color: inherit; }
 .kanban-add:hover { background: var(--surface); border-color: var(--primary); color: var(--primary); }
 
 /* ============================================================
+   Overview — relationship board
+   ============================================================ */
+
+/* Tray of unlinked items */
+.ov-tray {
+  background: var(--warn-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  transition: background .15s ease, outline .15s ease;
+}
+.ov-tray.is-drop-target {
+  outline: 2px dashed var(--warn);
+  outline-offset: -4px;
+}
+.ov-tray__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--warn);
+  margin-bottom: 10px;
+}
+.ov-tray__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Company grid */
+.overview-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.ov-company {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+  transition: outline .15s ease, box-shadow .15s ease;
+}
+.ov-company.is-drop-target {
+  outline: 2px dashed var(--primary);
+  outline-offset: -3px;
+  box-shadow: var(--sh-card-hover);
+}
+.ov-company__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.ov-company__avatar {
+  width: 34px; height: 34px;
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary), var(--plum));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 14px;
+}
+.ov-company__name {
+  font-weight: 700; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ov-company__meta {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 2px;
+}
+.ov-company__body { padding: 10px 12px 12px; }
+
+.ov-section { margin-top: 10px; }
+.ov-section:first-child { margin-top: 0; }
+.ov-section__title {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.ov-empty {
+  font-size: 11.5px; color: var(--muted); font-style: italic;
+  padding: 8px; text-align: center;
+  border: 1px dashed var(--border); border-radius: var(--r-sm);
+}
+
+/* Sector chip */
+.ov-sector-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--ink-2);
+  background: var(--surface-2);
+  padding: 2px 8px; border-radius: 999px;
+}
+.ov-sector-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* Draggable item chip */
+.ov-item {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  margin-bottom: 5px;
+  cursor: grab;
+  user-select: none;
+  transition: box-shadow .15s ease, transform .12s ease;
+}
+.ov-item:last-child { margin-bottom: 0; }
+.ov-item:hover { box-shadow: var(--sh-1); }
+.ov-item:active { cursor: grabbing; }
+.ov-item.is-dragging { opacity: 0.4; }
+.ov-item--contact     { border-left-color: var(--primary); }
+.ov-item--application { border-left-color: var(--success); }
+.ov-item--meeting     { border-left-color: var(--plum); }
+.ov-item__grip { color: var(--ink-3); flex-shrink: 0; cursor: grab; }
+.ov-item__label {
+  flex: 1; min-width: 0;
+  font-size: 12.5px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ov-item__link {
+  background: none; border: none; cursor: pointer;
+  color: var(--ink-3); padding: 2px; border-radius: 4px;
+  display: inline-flex; flex-shrink: 0;
+  transition: color .15s ease, background .15s ease;
+}
+.ov-item__link:hover { color: var(--primary); background: var(--surface-2); }
+
+/* Application with responsible-contact selector */
+.ov-app {
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  padding: 6px;
+  margin-bottom: 6px;
+}
+.ov-app .ov-item { margin-bottom: 0; background: var(--surface); }
+.ov-app__resp {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 4px 2px;
+}
+.ov-app__select {
+  flex: 1; font-size: 11.5px;
+  padding: 3px 8px; height: auto;
+}
+
+/* ============================================================
    Drawer
    ============================================================ */
 

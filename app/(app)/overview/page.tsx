@@ -2,15 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  Network, Users, KanbanSquare, CalendarCheck,
-  Link2, Unlink, ChevronDown, ChevronUp, UserCheck, Plus, X,
+  DndContext, DragEndEvent, DragStartEvent, DragOverlay,
+  PointerSensor, useSensor, useSensors, useDroppable, useDraggable,
+} from "@dnd-kit/core";
+import {
+  Network, Users, KanbanSquare, CalendarCheck, Unlink, UserCheck,
+  Pencil, Link2, ChevronDown, ChevronUp, GripVertical,
 } from "lucide-react";
 import { Badge, TempDot } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
+import { Drawer } from "@/components/ui/drawer";
 import { ListSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/lib/store";
 import { formatDate, statusLabel, statusColor } from "@/lib/utils";
-import type { Company, Contact, Application, Meeting } from "@/lib/types";
+import type { Company, Contact, Application, Meeting, Sector } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,109 +26,108 @@ interface OverviewData {
   meetings: Meeting[];
 }
 
-type LinkType = "contact" | "application" | "meeting";
+type EntityType = "contact" | "application" | "meeting";
+const UNLINKED = "__unlinked__";
 
-interface LinkModal {
-  type: LinkType;
-  entityId: string;
-}
+const TYPE_CFG = {
+  contact:     { color: "var(--primary)", icon: Users,         label: "Contact" },
+  application: { color: "var(--success)", icon: KanbanSquare,  label: "Candidature" },
+  meeting:     { color: "var(--plum)",    icon: CalendarCheck, label: "Réunion" },
+} as const;
 
-// ─── Quick-create forms (minimal, inline) ─────────────────────────────────────
+// ─── Draggable chip ───────────────────────────────────────────────────────────
 
-function QuickAddCompany({ onDone }: { onDone: (c: Company) => void }) {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const { showToast } = useToast();
-
-  async function handle(e: { preventDefault(): void }) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    setSaving(true);
-    const resp = await fetch("/api/companies", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim() }),
-    });
-    const json = await resp.json();
-    setSaving(false);
-    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur", "error"); return; }
-    setName("");
-    onDone(json.data);
-    showToast("Entreprise créée ✓");
-  }
-
+function DraggableItem({ dragId, type, children }: {
+  dragId: string; type: EntityType; children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: dragId });
+  const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
   return (
-    <form onSubmit={handle} className="row gap-2" style={{ marginTop: 8 }}>
-      <input className="input" style={{ flex: 1, fontSize: 13 }} placeholder="Nom de l'entreprise…" value={name} onChange={e => setName(e.target.value)} />
-      <button type="submit" className="btn btn--primary btn--sm" disabled={saving || !name.trim()}>
-        {saving ? "…" : <Plus size={13} />}
-      </button>
-    </form>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`ov-item ov-item--${type} ${isDragging ? "is-dragging" : ""}`}
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical size={12} className="ov-item__grip" />
+      {children}
+    </div>
   );
 }
 
-function QuickAddContact({ companyId, onDone }: { companyId?: string; onDone: (c: Contact) => void }) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName]   = useState("");
-  const [saving, setSaving] = useState(false);
-  const { showToast } = useToast();
+// ─── Droppable zone wrapper ───────────────────────────────────────────────────
 
-  async function handle(e: { preventDefault(): void }) {
-    e.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) return;
-    setSaving(true);
-    const resp = await fetch("/api/contacts", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), companyId: companyId ?? null }),
-    });
-    const json = await resp.json();
-    setSaving(false);
-    if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur", "error"); return; }
-    setFirstName(""); setLastName("");
-    onDone(json.data);
-    showToast("Contact créé ✓");
-  }
-
+function DropZone({ id, children, className }: { id: string; children: React.ReactNode; className?: string }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <form onSubmit={handle} className="col gap-2" style={{ marginTop: 8 }}>
-      <div className="row gap-2">
-        <input className="input" style={{ flex: 1, fontSize: 13 }} placeholder="Prénom" value={firstName} onChange={e => setFirstName(e.target.value)} />
-        <input className="input" style={{ flex: 1, fontSize: 13 }} placeholder="Nom" value={lastName} onChange={e => setLastName(e.target.value)} />
-        <button type="submit" className="btn btn--primary btn--sm" disabled={saving || !firstName.trim() || !lastName.trim()}>
-          {saving ? "…" : <Plus size={13} />}
-        </button>
-      </div>
-    </form>
+    <div ref={setNodeRef} className={`${className ?? ""} ${isOver ? "is-drop-target" : ""}`}>
+      {children}
+    </div>
   );
 }
 
-function QuickAddApplication({ companyId, contactId, onDone }: { companyId?: string; contactId?: string; onDone: (a: Application) => void }) {
-  const [jobTitle, setJobTitle] = useState("");
+// ─── Company edit drawer ──────────────────────────────────────────────────────
+
+function CompanyEditDrawer({ company, sectors, onClose, onSaved }: {
+  company: Company; sectors: Sector[]; onClose: () => void; onSaved: () => void;
+}) {
+  const [name, setName]         = useState(company.name);
+  const [sectorId, setSectorId] = useState(company.sectorId ?? "");
+  const [location, setLocation] = useState(company.location ?? "");
+  const [status, setStatus]     = useState(company.status);
   const [saving, setSaving]     = useState(false);
   const { showToast } = useToast();
 
-  async function handle(e: { preventDefault(): void }) {
-    e.preventDefault();
-    if (!jobTitle.trim()) return;
+  async function save() {
     setSaving(true);
-    const resp = await fetch("/api/applications", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobTitle: jobTitle.trim(), companyId: companyId ?? null, contactId: contactId ?? null }),
+    const resp = await fetch(`/api/companies/${company.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, sectorId: sectorId || null, location: location || null, status }),
     });
     const json = await resp.json();
     setSaving(false);
     if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur", "error"); return; }
-    setJobTitle("");
-    onDone(json.data);
-    showToast("Candidature créée ✓");
+    showToast("Société mise à jour ✓");
+    onSaved();
+    onClose();
   }
 
+  const STATUS_OPTS = ["to_contact","contacted","followed_up","interview","rejected","hot_opportunity"];
+
   return (
-    <form onSubmit={handle} className="row gap-2" style={{ marginTop: 8 }}>
-      <input className="input" style={{ flex: 1, fontSize: 13 }} placeholder="Intitulé du poste…" value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
-      <button type="submit" className="btn btn--primary btn--sm" disabled={saving || !jobTitle.trim()}>
-        {saving ? "…" : <Plus size={13} />}
-      </button>
-    </form>
+    <Drawer
+      open={true}
+      onClose={onClose}
+      title={`Éditer ${company.name}`}
+      footer={
+        <button className="btn btn--primary btn--full" onClick={save} disabled={saving}>
+          {saving ? "Enregistrement…" : "Enregistrer"}
+        </button>
+      }
+    >
+      <div className="field">
+        <label className="label">Nom de la société</label>
+        <input className="input" value={name} onChange={e => setName(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="label">Secteur</label>
+        <select className="input" value={sectorId} onChange={e => setSectorId(e.target.value)}>
+          <option value="">— Aucun —</option>
+          {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </div>
+      <div className="field">
+        <label className="label">Localisation</label>
+        <input className="input" value={location} onChange={e => setLocation(e.target.value)} placeholder="Paris, Remote…" />
+      </div>
+      <div className="field">
+        <label className="label">Statut</label>
+        <select className="input" value={status} onChange={e => setStatus(e.target.value as Company["status"])}>
+          {STATUS_OPTS.map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
+        </select>
+      </div>
+    </Drawer>
   );
 }
 
@@ -131,37 +135,34 @@ function QuickAddApplication({ companyId, contactId, onDone }: { companyId?: str
 
 export default function OverviewPage() {
   const [data, setData]       = useState<OverviewData>({ companies: [], contacts: [], applications: [], meetings: [] });
+  const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState("");
-  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
-  const [linkModal, setLinkModal] = useState<LinkModal | null>(null);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [selectedContactId, setSelectedContactId] = useState("");
-  const [showAddCompany, setShowAddCompany]   = useState(false);
-  const [showAddContact, setShowAddContact]   = useState<string | null>(null); // companyId or "orphan"
-  const [showAddApp, setShowAddApp]           = useState<string | null>(null); // companyId or "orphan"
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [activeDrag, setActiveDrag] = useState<{ type: EntityType; label: string } | null>(null);
+  const [linkPicker, setLinkPicker] = useState<{ type: EntityType; id: string } | null>(null);
+  const [editCompany, setEditCompany] = useState<Company | null>(null);
   const { showToast } = useToast();
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const load = useCallback(async () => {
     try {
-      const resp = await fetch("/api/overview");
-      const r = await resp.json();
-      if (r.data && typeof r.data === "object") {
-        const d: OverviewData = {
-          companies:    Array.isArray(r.data.companies)    ? r.data.companies    : [],
-          contacts:     Array.isArray(r.data.contacts)     ? r.data.contacts     : [],
-          applications: Array.isArray(r.data.applications) ? r.data.applications : [],
-          meetings:     Array.isArray(r.data.meetings)     ? r.data.meetings     : [],
-        };
-        setData(d);
-        if (d.companies.length) {
-          setExpandedCompanies(new Set(d.companies.slice(0, 5).map((c: Company) => c.id)));
-        }
-      } else if (r.error) {
-        console.error("[Overview] API error:", r.error);
+      const [ovRes, secRes] = await Promise.all([
+        fetch("/api/overview").then(r => r.json()),
+        fetch("/api/sectors").then(r => r.json()),
+      ]);
+      if (ovRes.data && typeof ovRes.data === "object") {
+        setData({
+          companies:    Array.isArray(ovRes.data.companies)    ? ovRes.data.companies    : [],
+          contacts:     Array.isArray(ovRes.data.contacts)     ? ovRes.data.contacts     : [],
+          applications: Array.isArray(ovRes.data.applications) ? ovRes.data.applications : [],
+          meetings:     Array.isArray(ovRes.data.meetings)     ? ovRes.data.meetings     : [],
+        });
       }
+      setSectors(Array.isArray(secRes.data) ? secRes.data : []);
     } catch (e) {
-      console.error("[Overview] Fetch error:", e);
+      console.error("[Overview] load error:", e);
     } finally {
       setLoading(false);
     }
@@ -170,59 +171,79 @@ export default function OverviewPage() {
   useEffect(() => { load(); }, [load]);
 
   const { companies, contacts, applications, meetings } = data;
+  const sectorMap = Object.fromEntries(sectors.map(s => [s.id, s]));
 
-  // Build clusters
-  const clusters = companies.map(company => ({
-    company,
-    contacts: contacts.filter(c => c.companyId === company.id),
-    applications: applications.filter(a => a.companyId === company.id),
-    meetings: meetings.filter(m => m.companyId === company.id),
-  })).filter(cl => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      cl.company.name.toLowerCase().includes(s) ||
-      cl.contacts.some(c => `${c.firstName} ${c.lastName}`.toLowerCase().includes(s)) ||
-      cl.applications.some(a => a.jobTitle.toLowerCase().includes(s))
-    );
-  });
-
-  const orphanContacts     = contacts.filter(c => !c.companyId).filter(c => !search || `${c.firstName} ${c.lastName}`.toLowerCase().includes(search.toLowerCase()));
-  const orphanApplications = applications.filter(a => !a.companyId).filter(a => !search || a.jobTitle.toLowerCase().includes(search.toLowerCase()));
-
-  function toggleExpand(id: string) {
-    setExpandedCompanies(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  }
-
-  async function applyLink() {
-    if (!linkModal || !selectedCompanyId) return;
-    const { type, entityId } = linkModal;
+  // ── Link / unlink ──
+  async function linkEntity(type: EntityType, id: string, companyId: string | null) {
     const endpoint = type === "contact" ? "contacts" : type === "application" ? "applications" : "meetings";
-    const body: Record<string, string | null> = { companyId: selectedCompanyId };
-    if (type === "application" && selectedContactId) body.contactId = selectedContactId;
-    await fetch(`/api/${endpoint}/${entityId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    showToast("Liaison créée ✓");
-    setLinkModal(null); setSelectedCompanyId(""); setSelectedContactId("");
-    load();
+    const body: Record<string, string | null> = { companyId };
+    if (type === "application" && companyId === null) body.contactId = null;
+
+    // optimistic update
+    setData(prev => {
+      const apply = <T extends { id: string }>(arr: T[]) =>
+        arr.map(item => item.id === id ? { ...item, ...body } : item);
+      if (type === "contact")     return { ...prev, contacts: apply(prev.contacts) };
+      if (type === "application") return { ...prev, applications: apply(prev.applications) };
+      return { ...prev, meetings: apply(prev.meetings) };
+    });
+
+    const resp = await fetch(`/api/${endpoint}/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!resp.ok) { showToast("Erreur lors de la liaison", "error"); load(); return; }
+    showToast(companyId ? "Relié ✓" : "Détaché");
   }
 
   async function assignContact(applicationId: string, contactId: string | null) {
-    await fetch(`/api/applications/${applicationId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactId }) });
-    showToast(contactId ? "Contact assigné ✓" : "Contact retiré");
-    load();
+    setData(prev => ({
+      ...prev,
+      applications: prev.applications.map(a => a.id === applicationId ? { ...a, contactId } : a),
+    }));
+    const resp = await fetch(`/api/applications/${applicationId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactId }),
+    });
+    if (!resp.ok) { showToast("Erreur", "error"); load(); return; }
+    showToast(contactId ? "Responsable assigné ✓" : "Responsable retiré");
   }
 
-  async function unlinkEntity(type: LinkType, entityId: string) {
-    const endpoint = type === "contact" ? "contacts" : type === "application" ? "applications" : "meetings";
-    const body: Record<string, null> = { companyId: null };
-    if (type === "application") body.contactId = null;
-    await fetch(`/api/${endpoint}/${entityId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    showToast("Liaison retirée");
-    load();
+  // ── Drag handlers ──
+  function handleDragStart(e: DragStartEvent) {
+    const [type, id] = String(e.active.id).split(":") as [EntityType, string];
+    let label = "";
+    if (type === "contact")     { const c = contacts.find(x => x.id === id); label = c ? `${c.firstName} ${c.lastName}` : ""; }
+    if (type === "application") { const a = applications.find(x => x.id === id); label = a?.jobTitle ?? ""; }
+    if (type === "meeting")     { const m = meetings.find(x => x.id === id); label = m?.title ?? ""; }
+    setActiveDrag({ type, label });
   }
 
-  const totalOrphans = orphanContacts.length + orphanApplications.length;
-  const modalCompanyContacts = selectedCompanyId ? contacts.filter(c => c.companyId === selectedCompanyId) : contacts;
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveDrag(null);
+    const { active, over } = e;
+    if (!over) return;
+    const [type, id] = String(active.id).split(":") as [EntityType, string];
+    const target = String(over.id);
+    if (target === UNLINKED) {
+      linkEntity(type, id, null);
+    } else if (companies.some(c => c.id === target)) {
+      linkEntity(type, id, target);
+    }
+  }
+
+  function toggleCollapse(id: string) {
+    setCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  // ── Filtering ──
+  const s = search.toLowerCase();
+  const matchCompany = (c: Company) => !s || c.name.toLowerCase().includes(s);
+
+  const orphanContacts     = contacts.filter(c => !c.companyId).filter(c => !s || `${c.firstName} ${c.lastName}`.toLowerCase().includes(s));
+  const orphanApplications = applications.filter(a => !a.companyId).filter(a => !s || a.jobTitle.toLowerCase().includes(s));
+  const orphanMeetings     = meetings.filter(m => !m.companyId).filter(m => !s || m.title.toLowerCase().includes(s));
+  const totalOrphans = orphanContacts.length + orphanApplications.length + orphanMeetings.length;
+
+  const visibleCompanies = companies.filter(matchCompany);
 
   if (loading) return (
     <div className="main__inner">
@@ -237,7 +258,7 @@ export default function OverviewPage() {
         <div>
           <h1 className="page-head__title">Overview</h1>
           <p className="page-head__sub">
-            {companies.length} entreprise{companies.length !== 1 ? "s" : ""} · {contacts.length} contact{contacts.length !== 1 ? "s" : ""} · {applications.length} candidature{applications.length !== 1 ? "s" : ""}
+            {companies.length} société{companies.length !== 1 ? "s" : ""} · {contacts.length} contact{contacts.length !== 1 ? "s" : ""} · {applications.length} candidature{applications.length !== 1 ? "s" : ""}
             {totalOrphans > 0 && <span style={{ color: "var(--warn)" }}> · {totalOrphans} à relier</span>}
           </p>
         </div>
@@ -245,321 +266,214 @@ export default function OverviewPage() {
 
       <div className="toolbar">
         <div className="search" style={{ flex: 1 }}>
-          <input placeholder="Rechercher dans tout…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input placeholder="Rechercher une société…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
 
-      {/* ── Orphans (contacts/applications not linked to any company) ── */}
-      {(orphanContacts.length > 0 || orphanApplications.length > 0) && (
-        <div className="card" style={{ marginBottom: 20, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", background: "var(--warn-soft)", borderBottom: "1px solid var(--border)" }}>
-            <div className="row gap-2">
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+
+        {/* ── Bac non reliés ── */}
+        {totalOrphans > 0 && (
+          <DropZone id={UNLINKED} className="ov-tray">
+            <div className="ov-tray__head">
               <Unlink size={14} color="var(--warn)" />
-              <span style={{ fontWeight: 700, fontSize: 13, color: "var(--warn)" }}>
-                Éléments sans entreprise ({totalOrphans}) — relie-les à un cluster ci-dessous
-              </span>
+              <span>Non reliés ({totalOrphans}) — glisse-les sur une société, ou clique « Relier »</span>
+            </div>
+            <div className="ov-tray__items">
+              {orphanContacts.map(c => (
+                <DraggableItem key={c.id} dragId={`contact:${c.id}`} type="contact">
+                  <TempDot temp={c.temperature} />
+                  <span className="ov-item__label">{c.firstName} {c.lastName}</span>
+                  <button className="ov-item__link" title="Relier à une société" onClick={() => setLinkPicker({ type: "contact", id: c.id })}>
+                    <Link2 size={12} />
+                  </button>
+                </DraggableItem>
+              ))}
+              {orphanApplications.map(a => (
+                <DraggableItem key={a.id} dragId={`application:${a.id}`} type="application">
+                  <KanbanSquare size={12} color="var(--success)" />
+                  <span className="ov-item__label">{a.jobTitle}</span>
+                  <button className="ov-item__link" title="Relier à une société" onClick={() => setLinkPicker({ type: "application", id: a.id })}>
+                    <Link2 size={12} />
+                  </button>
+                </DraggableItem>
+              ))}
+              {orphanMeetings.map(m => (
+                <DraggableItem key={m.id} dragId={`meeting:${m.id}`} type="meeting">
+                  <CalendarCheck size={12} color="var(--plum)" />
+                  <span className="ov-item__label">{m.title}</span>
+                  <button className="ov-item__link" title="Relier à une société" onClick={() => setLinkPicker({ type: "meeting", id: m.id })}>
+                    <Link2 size={12} />
+                  </button>
+                </DraggableItem>
+              ))}
+            </div>
+          </DropZone>
+        )}
+
+        {/* ── Grille des sociétés ── */}
+        {companies.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--muted)" }}>
+            <Network size={36} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: "var(--ink)" }}>Aucune société pour l'instant</div>
+            <div style={{ fontSize: 13 }}>
+              Crée une société en ajoutant un <a href="/contacts" style={{ color: "var(--primary)", fontWeight: 600 }}>contact</a> et en renseignant son entreprise.
             </div>
           </div>
-          <div style={{ padding: "12px 16px" }}>
-            {orphanContacts.length > 0 && (
-              <div style={{ marginBottom: orphanApplications.length > 0 ? 12 : 0 }}>
-                <div className="muted tiny" style={{ marginBottom: 6, fontWeight: 700 }}>CONTACTS</div>
-                <div className="col gap-1">
-                  {orphanContacts.map(c => (
-                    <div key={c.id} className="row gap-2 between" style={{ padding: "6px 10px", borderRadius: "var(--r-sm)", background: "var(--surface-2)" }}>
-                      <div className="row gap-2">
-                        <TempDot temp={c.temperature} />
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{c.firstName} {c.lastName}</span>
-                        {c.role && <span className="muted tiny">· {c.role}</span>}
+        ) : (
+          <div className="overview-board">
+            {visibleCompanies.map(company => {
+              const cc = contacts.filter(c => c.companyId === company.id);
+              const ca = applications.filter(a => a.companyId === company.id);
+              const cm = meetings.filter(m => m.companyId === company.id);
+              const sector = company.sectorId ? sectorMap[company.sectorId] : null;
+              const isCollapsed = collapsed.has(company.id);
+
+              return (
+                <DropZone key={company.id} id={company.id} className="ov-company">
+                  {/* Header */}
+                  <div className="ov-company__head">
+                    <div className="ov-company__avatar">{company.name.charAt(0).toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="ov-company__name">{company.name}</div>
+                      <div className="ov-company__meta">
+                        {sector && (
+                          <span className="ov-sector-chip">
+                            <span className="ov-sector-dot" style={{ background: sector.color }} />
+                            {sector.name}
+                          </span>
+                        )}
+                        <span className="muted tiny">{cc.length}👤 · {ca.length}📄 · {cm.length}📅</span>
                       </div>
-                      <button className="btn btn--sm btn--primary" onClick={() => { setLinkModal({ type: "contact", entityId: c.id }); setSelectedCompanyId(""); setSelectedContactId(""); }}>
-                        <Link2 size={12} /> Relier
-                      </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {orphanApplications.length > 0 && (
-              <div>
-                <div className="muted tiny" style={{ marginBottom: 6, fontWeight: 700 }}>CANDIDATURES</div>
-                <div className="col gap-1">
-                  {orphanApplications.map(a => (
-                    <div key={a.id} className="row gap-2 between" style={{ padding: "6px 10px", borderRadius: "var(--r-sm)", background: "var(--surface-2)" }}>
-                      <div className="row gap-2">
-                        <KanbanSquare size={13} color="var(--success)" />
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{a.jobTitle}</span>
-                        <Badge tone={statusColor(a.status) as "info" | "success" | "warn" | "danger" | "neutral" | "plum"}>{statusLabel(a.status)}</Badge>
-                      </div>
-                      <button className="btn btn--sm btn--primary" onClick={() => { setLinkModal({ type: "application", entityId: a.id }); setSelectedCompanyId(""); setSelectedContactId(""); }}>
-                        <Link2 size={12} /> Relier
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Company clusters ── */}
-      <div className="col gap-3">
-        {clusters.map(({ company, contacts: cc, applications: ca, meetings: cm }) => {
-          const isExpanded = expandedCompanies.has(company.id);
-          return (
-            <div key={company.id} className="card" style={{ overflow: "hidden" }}>
-              {/* Header */}
-              <button onClick={() => toggleExpand(company.id)} style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 12,
-                padding: "14px 16px", border: "none", background: "none",
-                cursor: "pointer", color: "var(--ink)", textAlign: "left",
-              }}>
-                <div style={{
-                  width: 38, height: 38, borderRadius: "var(--r-md)", flexShrink: 0,
-                  background: "linear-gradient(135deg, var(--primary), var(--primary-hover))",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "white", fontWeight: 700, fontSize: 15,
-                }}>
-                  {company.name.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{company.name}</div>
-                  <div className="muted tiny">
-                    {cc.length} contact{cc.length !== 1 ? "s" : ""} · {ca.length} candidature{ca.length !== 1 ? "s" : ""}
-                    {company.location ? ` · ${company.location}` : ""}
-                  </div>
-                </div>
-                <Badge tone={statusColor(company.status) as "info" | "success" | "warn" | "danger" | "neutral" | "plum"}>
-                  {statusLabel(company.status)}
-                </Badge>
-                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-
-              {isExpanded && (
-                <div style={{ padding: "0 16px 16px", borderTop: "1px solid var(--border)" }}>
-
-                  {/* ── Contacts ── */}
-                  <div style={{ marginTop: 14 }}>
-                    <div className="row gap-2 between" style={{ marginBottom: 8 }}>
-                      <div className="row gap-2">
-                        <Users size={13} strokeWidth={1.75} />
-                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--muted)" }}>
-                          Contacts ({cc.length})
-                        </span>
-                      </div>
-                      <button className="btn btn--ghost btn--icon" title="Ajouter un contact" onClick={() => setShowAddContact(showAddContact === company.id ? null : company.id)}>
-                        <Plus size={14} />
-                      </button>
-                    </div>
-
-                    {cc.length === 0 && showAddContact !== company.id && (
-                      <div className="muted" style={{ fontSize: 12, fontStyle: "italic", marginBottom: 6 }}>
-                        Aucun contact — clique sur + pour en ajouter un
-                      </div>
-                    )}
-
-                    <div className="col gap-1">
-                      {cc.map(c => {
-                        const handledApps = ca.filter(a => a.contactId === c.id);
-                        return (
-                          <div key={c.id} style={{ padding: "8px 10px", borderRadius: "var(--r-sm)", background: "var(--surface-2)" }}>
-                            <div className="row gap-2 between">
-                              <div className="row gap-2">
-                                <TempDot temp={c.temperature} />
-                                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.firstName} {c.lastName}</span>
-                                {c.role && <span className="muted tiny">· {c.role}</span>}
-                              </div>
-                              <button className="btn btn--ghost btn--icon" title="Délier" onClick={() => unlinkEntity("contact", c.id)}>
-                                <Unlink size={11} />
-                              </button>
-                            </div>
-                            {handledApps.length > 0 && (
-                              <div style={{ marginTop: 4, paddingLeft: 14, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                {handledApps.map(a => (
-                                  <span key={a.id} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", background: "var(--primary-soft)", color: "var(--primary-ink)", borderRadius: "var(--r-full)" }}>
-                                    {a.jobTitle}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {showAddContact === company.id && (
-                      <QuickAddContact
-                        companyId={company.id}
-                        onDone={c => { setShowAddContact(null); setData(prev => ({ ...prev, contacts: [c, ...prev.contacts] })); }}
-                      />
-                    )}
+                    <button className="btn btn--ghost btn--icon" title="Éditer la société" onClick={() => setEditCompany(company)}>
+                      <Pencil size={13} />
+                    </button>
+                    <button className="btn btn--ghost btn--icon" title={isCollapsed ? "Déplier" : "Replier"} onClick={() => toggleCollapse(company.id)}>
+                      {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
                   </div>
 
-                  {/* ── Candidatures ── */}
-                  <div style={{ marginTop: 16 }}>
-                    <div className="row gap-2 between" style={{ marginBottom: 8 }}>
-                      <div className="row gap-2">
-                        <KanbanSquare size={13} strokeWidth={1.75} />
-                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--muted)" }}>
-                          Candidatures ({ca.length})
-                        </span>
-                      </div>
-                      <button className="btn btn--ghost btn--icon" title="Ajouter une candidature" onClick={() => setShowAddApp(showAddApp === company.id ? null : company.id)}>
-                        <Plus size={14} />
-                      </button>
-                    </div>
-
-                    {ca.length === 0 && showAddApp !== company.id && (
-                      <div className="muted" style={{ fontSize: 12, fontStyle: "italic", marginBottom: 6 }}>
-                        Aucune candidature — clique sur + pour en ajouter une
-                      </div>
-                    )}
-
-                    <div className="col gap-2">
-                      {ca.map(a => {
-                        const linkedContact = a.contactId ? contacts.find(c => c.id === a.contactId) : null;
-                        return (
-                          <div key={a.id} style={{ padding: "10px 12px", borderRadius: "var(--r-md)", background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                            <div className="row gap-2 between" style={{ marginBottom: 8 }}>
-                              <div className="row gap-2">
-                                <span style={{ fontSize: 13, fontWeight: 600 }}>{a.jobTitle}</span>
-                                <Badge tone={statusColor(a.status) as "info" | "success" | "warn" | "danger" | "neutral" | "plum"}>{statusLabel(a.status)}</Badge>
-                              </div>
-                              <button className="btn btn--ghost btn--icon" title="Délier" onClick={() => unlinkEntity("application", a.id)}>
-                                <Unlink size={11} />
-                              </button>
-                            </div>
-                            {/* Contact assignment inline */}
-                            <div className="row gap-2" style={{ alignItems: "center" }}>
-                              <UserCheck size={12} color={linkedContact ? "var(--success)" : "var(--muted)"} />
-                              <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em" }}>Contact</span>
-                              {cc.length > 0 ? (
-                                <select
-                                  className="input"
-                                  style={{ fontSize: 12, padding: "3px 8px", height: "auto", flex: 1, maxWidth: 240 }}
-                                  value={a.contactId ?? ""}
-                                  onChange={e => assignContact(a.id, e.target.value || null)}
-                                >
-                                  <option value="">— Aucun —</option>
-                                  {cc.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}{c.role ? ` (${c.role})` : ""}</option>)}
-                                </select>
-                              ) : (
-                                <span style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>
-                                  Ajoute d&apos;abord un contact à cette entreprise
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {showAddApp === company.id && (
-                      <QuickAddApplication
-                        companyId={company.id}
-                        onDone={a => { setShowAddApp(null); setData(prev => ({ ...prev, applications: [a, ...prev.applications] })); }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Réunions */}
-                  {cm.length > 0 && (
-                    <div style={{ marginTop: 16 }}>
-                      <div className="row gap-2" style={{ marginBottom: 8 }}>
-                        <CalendarCheck size={13} strokeWidth={1.75} />
-                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--muted)" }}>Réunions ({cm.length})</span>
-                      </div>
-                      <div className="col gap-1">
-                        {cm.map(m => (
-                          <div key={m.id} className="row gap-2 between" style={{ padding: "6px 10px", borderRadius: "var(--r-sm)", background: "var(--surface-2)" }}>
-                            <div>
-                              <span style={{ fontSize: 12.5, fontWeight: 500 }}>{m.title}</span>
-                              <span className="muted tiny" style={{ marginLeft: 6 }}>· {formatDate(m.date)}</span>
-                            </div>
-                            <button className="btn btn--ghost btn--icon" onClick={() => unlinkEntity("meeting", m.id)}><Unlink size={11} /></button>
-                          </div>
+                  {!isCollapsed && (
+                    <div className="ov-company__body">
+                      {/* Contacts */}
+                      <div className="ov-section">
+                        <div className="ov-section__title"><Users size={11} /> Contacts ({cc.length})</div>
+                        {cc.length === 0 && <div className="ov-empty">Glisse un contact ici</div>}
+                        {cc.map(c => (
+                          <DraggableItem key={c.id} dragId={`contact:${c.id}`} type="contact">
+                            <TempDot temp={c.temperature} />
+                            <span className="ov-item__label">{c.firstName} {c.lastName}{c.role ? ` · ${c.role}` : ""}</span>
+                            <button className="ov-item__link" title="Détacher" onClick={() => linkEntity("contact", c.id, null)}>
+                              <Unlink size={11} />
+                            </button>
+                          </DraggableItem>
                         ))}
                       </div>
+
+                      {/* Candidatures */}
+                      <div className="ov-section">
+                        <div className="ov-section__title"><KanbanSquare size={11} /> Candidatures ({ca.length})</div>
+                        {ca.length === 0 && <div className="ov-empty">Glisse une candidature ici</div>}
+                        {ca.map(a => {
+                          const resp = a.contactId ? contacts.find(c => c.id === a.contactId) : null;
+                          return (
+                            <div key={a.id} className="ov-app">
+                              <DraggableItem dragId={`application:${a.id}`} type="application">
+                                <KanbanSquare size={12} color="var(--success)" />
+                                <span className="ov-item__label">{a.jobTitle}</span>
+                                <Badge tone={statusColor(a.status) as "info" | "success" | "warn" | "danger" | "neutral" | "plum"}>{statusLabel(a.status)}</Badge>
+                                <button className="ov-item__link" title="Détacher" onClick={() => linkEntity("application", a.id, null)}>
+                                  <Unlink size={11} />
+                                </button>
+                              </DraggableItem>
+                              <div className="ov-app__resp">
+                                <UserCheck size={11} color={resp ? "var(--success)" : "var(--muted)"} />
+                                {cc.length > 0 ? (
+                                  <select
+                                    className="input ov-app__select"
+                                    value={a.contactId ?? ""}
+                                    onChange={e => assignContact(a.id, e.target.value || null)}
+                                  >
+                                    <option value="">Responsable…</option>
+                                    {cc.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                                  </select>
+                                ) : (
+                                  <span className="muted tiny" style={{ fontStyle: "italic" }}>Ajoute un contact d&apos;abord</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Réunions */}
+                      {cm.length > 0 && (
+                        <div className="ov-section">
+                          <div className="ov-section__title"><CalendarCheck size={11} /> Réunions ({cm.length})</div>
+                          {cm.map(m => (
+                            <DraggableItem key={m.id} dragId={`meeting:${m.id}`} type="meeting">
+                              <CalendarCheck size={12} color="var(--plum)" />
+                              <span className="ov-item__label">{m.title} · {formatDate(m.date)}</span>
+                              <button className="ov-item__link" title="Détacher" onClick={() => linkEntity("meeting", m.id, null)}>
+                                <Unlink size={11} />
+                              </button>
+                            </DraggableItem>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
+                </DropZone>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Drag overlay (ghost) */}
+        <DragOverlay>
+          {activeDrag ? (
+            <div className={`ov-item ov-item--${activeDrag.type}`} style={{ boxShadow: "var(--sh-3)", opacity: 0.95 }}>
+              <GripVertical size={12} className="ov-item__grip" />
+              <span className="ov-item__label">{activeDrag.label}</span>
             </div>
-          );
-        })}
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
-        {/* ── Add new company ── */}
-        <div className="card" style={{ padding: "14px 16px", borderStyle: "dashed", borderColor: "var(--border-strong)", background: "transparent" }}>
-          <button
-            className="row gap-2"
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--primary)", fontWeight: 600, fontSize: 13, padding: 0 }}
-            onClick={() => setShowAddCompany(p => !p)}
-          >
-            {showAddCompany ? <X size={14} /> : <Plus size={14} />}
-            {showAddCompany ? "Annuler" : "Ajouter une entreprise"}
-          </button>
-          {showAddCompany && (
-            <QuickAddCompany
-              onDone={c => {
-                setShowAddCompany(false);
-                setData(prev => ({ ...prev, companies: [...prev.companies, c] }));
-                setExpandedCompanies(prev => new Set(prev).add(c.id));
-              }}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Empty state — only when absolutely nothing */}
-      {companies.length === 0 && !showAddCompany && (
-        <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--muted)" }}>
-          <Network size={36} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: "var(--ink)" }}>Aucune entreprise encore</div>
-          <div style={{ fontSize: 13, marginBottom: 16 }}>Commence par créer ta première entreprise ci-dessous, puis ajoute-y des contacts et des candidatures.</div>
-          <button className="btn btn--primary" onClick={() => setShowAddCompany(true)}>
-            <Plus size={14} /> Ajouter la première entreprise
-          </button>
-        </div>
-      )}
-
-      {/* ── Link modal ── */}
+      {/* Link picker modal (touch fallback) */}
       <Modal
-        open={!!linkModal}
-        onClose={() => { setLinkModal(null); setSelectedCompanyId(""); setSelectedContactId(""); }}
-        title={linkModal?.type === "application" ? "Relier cette candidature" : "Relier à une entreprise"}
+        open={!!linkPicker}
+        onClose={() => setLinkPicker(null)}
+        title="Relier à une société"
         size="sm"
       >
-        <div className="col gap-3">
-          <div className="field">
-            <label className="label">Entreprise *</label>
-            <select className="input" value={selectedCompanyId} onChange={e => { setSelectedCompanyId(e.target.value); setSelectedContactId(""); }}>
-              <option value="">— Sélectionner —</option>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          {linkModal?.type === "application" && (
-            <div className="field">
-              <label className="label">Contact responsable (optionnel)</label>
-              <select className="input" value={selectedContactId} onChange={e => setSelectedContactId(e.target.value)}>
-                <option value="">— Aucun —</option>
-                {modalCompanyContacts.map(c => (
-                  <option key={c.id} value={c.id}>{c.firstName} {c.lastName}{c.role ? ` · ${c.role}` : ""}</option>
-                ))}
-              </select>
-              {selectedCompanyId && modalCompanyContacts.length === 0 && (
-                <span className="muted tiny">Aucun contact dans cette entreprise — ajoutes-en depuis son cluster</span>
-              )}
-            </div>
+        <div className="col gap-2">
+          {companies.length === 0 && (
+            <div className="muted" style={{ fontSize: 13 }}>Aucune société. Crée-en une depuis la fiche Contact.</div>
           )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button className="btn" onClick={() => { setLinkModal(null); setSelectedCompanyId(""); setSelectedContactId(""); }}>Annuler</button>
-            <button className="btn btn--primary" disabled={!selectedCompanyId} onClick={applyLink}>
-              <Link2 size={13} /> Relier
+          {companies.map(c => (
+            <button
+              key={c.id}
+              className="btn btn--full"
+              style={{ justifyContent: "flex-start" }}
+              onClick={() => { if (linkPicker) linkEntity(linkPicker.type, linkPicker.id, c.id); setLinkPicker(null); }}
+            >
+              {c.name}
             </button>
-          </div>
+          ))}
         </div>
       </Modal>
+
+      {/* Company edit drawer */}
+      {editCompany && (
+        <CompanyEditDrawer
+          company={editCompany}
+          sectors={sectors}
+          onClose={() => setEditCompany(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   );
 }
