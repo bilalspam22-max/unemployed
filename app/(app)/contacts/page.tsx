@@ -55,14 +55,10 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
     companyWebsite:   "",
   });
   const [saving, setSaving] = useState(false);
-  // If a company name was pre-filled (clip / prefill) and it isn't an existing one,
-  // treat it as a NEW company from the start (mirrors the AppForm behaviour).
-  const [isNewCompany, setIsNewCompany] = useState(() => {
-    if (!initialCompanyName) return false;
-    return !(companyNames ?? []).some(n => n.toLowerCase() === initialCompanyName.toLowerCase());
-  });
 
   function up(key: string, val: unknown) { setD(prev => ({ ...prev, [key]: val })); }
+
+  const companyIsKnown = !!d.companyName && (companyNames ?? []).some(n => n.toLowerCase() === d.companyName.toLowerCase());
 
   async function handle(e: React.FormEvent) {
     e.preventDefault();
@@ -131,54 +127,35 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
       <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: 12 }}>
         Entreprise
       </div>
-      <div className="field">
-        <label className="label">Société</label>
-        <select
-          className="input"
-          value={isNewCompany ? "__new__" : d.companyName}
-          onChange={e => {
-            if (e.target.value === "__new__") {
-              setIsNewCompany(true);
-              up("companyName", "");
-            } else {
-              setIsNewCompany(false);
-              up("companyName", e.target.value);
-            }
-          }}
-        >
-          <option value="">— Aucune —</option>
-          {(companyNames ?? []).map(n => <option key={n} value={n}>{n}</option>)}
-          <option value="__new__">＋ Nouvelle société…</option>
-        </select>
-      </div>
-
-      {isNewCompany && (
-        <div style={{ padding: "12px 14px", background: "var(--surface-2)", borderRadius: "var(--r-md)", marginBottom: 16, border: "1px solid var(--border)" }}>
-          <div className="field">
-            <label className="label">Nom de la nouvelle société *</label>
-            <input
-              className="input"
-              value={d.companyName}
-              onChange={e => up("companyName", e.target.value)}
-              placeholder="Airbus, Capgemini, startup XYZ…"
-              autoFocus
-            />
-          </div>
-          <div className="form-grid">
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label className="label">Secteur</label>
-              <select className="input" value={d.companySectorId} onChange={e => up("companySectorId", e.target.value)}>
-                <option value="">— Aucun —</option>
-                {(sectors ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label className="label">Localisation</label>
-              <input className="input" value={d.companyLocation} onChange={e => up("companyLocation", e.target.value)} placeholder="Paris, Remote…" />
-            </div>
-          </div>
+      <div className="form-grid">
+        <div className="field">
+          <label className="label">Société</label>
+          <input
+            className="input"
+            list="contact-company-list"
+            value={d.companyName}
+            onChange={e => up("companyName", e.target.value)}
+            placeholder="Tape un nom (ou choisis dans la liste)…"
+          />
+          <datalist id="contact-company-list">
+            {(companyNames ?? []).map(n => <option key={n} value={n} />)}
+          </datalist>
+          <span className="muted tiny" style={{ marginTop: 3, display: "block" }}>
+            {d.companyName
+              ? (companyIsKnown
+                  ? "✓ Société existante — sera reliée"
+                  : "✨ Nouvelle société — sera créée automatiquement")
+              : "Laisse vide si tu ne connais pas la société"}
+          </span>
         </div>
-      )}
+        <div className="field">
+          <label className="label">Secteur (si nouvelle)</label>
+          <select className="input" value={d.companySectorId} onChange={e => up("companySectorId", e.target.value)} disabled={companyIsKnown || !d.companyName}>
+            <option value="">— Aucun —</option>
+            {(sectors ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      </div>
 
       {/* ── Suivi ── */}
       <div className="divider" style={{ margin: "16px 0 12px" }} />
