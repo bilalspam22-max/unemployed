@@ -13,18 +13,29 @@ import { useToast } from "@/lib/store";
 function buildJobBookmarklet(origin: string): string {
   const code = `(function(){try{
 var O=${JSON.stringify(origin)};
-function t(s){try{var e=document.querySelector(s);return e?e.textContent.trim().replace(/\\s+/g," "):"";}catch(_){return"";}}
-function meta(n){var e=document.querySelector('meta[property="'+n+'"]')||document.querySelector('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
+function q(s,r){try{return (r||document).querySelector(s);}catch(_){return null;}}
+function txt(e){return e?(e.textContent||"").trim().replace(/\\s+/g," "):"";}
+function meta(n){var e=q('meta[property="'+n+'"]')||q('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
 var title="",company="",url=location.href,h=location.hostname;
 var S=document.querySelectorAll('script[type="application/ld+json"]');
 for(var i=0;i<S.length;i++){try{var d=JSON.parse(S[i].textContent);var a=Array.isArray(d)?d:(d["@graph"]||[d]);for(var j=0;j<a.length;j++){var o=a[j];if(!o)continue;var ty=o["@type"];if(ty==="JobPosting"||(Array.isArray(ty)&&ty.indexOf("JobPosting")>-1)){title=o.title||title;var ho=o.hiringOrganization;if(ho)company=(typeof ho==="string"?ho:ho.name)||company;}}}catch(e){}}
-if(!title){if(h.indexOf("linkedin")>-1)title=t(".job-details-jobs-unified-top-card__job-title")||t(".jobs-unified-top-card__job-title")||t(".top-card-layout__title")||t("h1");else if(h.indexOf("indeed")>-1)title=t("h1.jobsearch-JobInfoHeader-title")||t('[data-testid="jobsearch-JobInfoHeader-title"]')||t("h1");else title=t("h1");}
-if(!company){if(h.indexOf("linkedin")>-1)company=t(".job-details-jobs-unified-top-card__company-name a")||t(".job-details-jobs-unified-top-card__company-name")||t(".jobs-unified-top-card__company-name")||t(".topcard__org-name-link");else if(h.indexOf("indeed")>-1)company=t('[data-testid="inlineHeader-companyName"]')||t('[data-company-name="true"]')||t(".jobsearch-CompanyInfoContainer a");}
-if(!title){var og=meta("og:title");if(og){title=og.replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();}}
+if(h.indexOf("linkedin")>-1){
+  var pane=q(".jobs-search__job-details")||q(".scaffold-layout__detail")||q(".jobs-semantic-search__job-details")||q(".job-view-layout");
+  if(!title)title=txt(q(".job-details-jobs-unified-top-card__job-title",pane||document))||txt(q(".jobs-unified-top-card__job-title",pane||document));
+  if(!title&&pane)title=txt(q("h1",pane))||txt(q("h2",pane));
+  if(!company)company=txt(q(".job-details-jobs-unified-top-card__company-name a",pane||document))||txt(q(".job-details-jobs-unified-top-card__company-name",pane||document))||txt(q('a[href*="/company/"]',pane||document));
+}else if(h.indexOf("indeed")>-1){
+  if(!title)title=txt(q("h1.jobsearch-JobInfoHeader-title"))||txt(q('[data-testid="jobsearch-JobInfoHeader-title"]'))||txt(q("h1"));
+  if(!company)company=txt(q('[data-testid="inlineHeader-companyName"]'))||txt(q('[data-company-name="true"]'))||txt(q(".jobsearch-CompanyInfoContainer a"));
+}
+var og=meta("og:title");
+if(og&&(!title||!company)){var mm=og.match(/^(.+?)\\s+hiring\\s+(.+?)(?:\\s+in\\s+.+?)?\\s*\\|/i);if(mm){if(!company)company=mm[1].trim();if(!title)title=mm[2].trim();}else if(!title){title=og.replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();}}
 if(!title)title=(document.title||"").replace(/^\\(\\d+\\+?\\)\\s*/,"").replace(/\\s*\\|.*$/,"").trim();
+if(company)company=company.replace(/\\s*[·|].*$/,"").trim();
+var dt=new Date();var today=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
 var via=h.indexOf("linkedin")>-1?"linkedin":"direct";
-var q="?new=1&via="+via+"&url="+encodeURIComponent(url)+"&title="+encodeURIComponent(title)+"&company="+encodeURIComponent(company);
-window.open(O+"/applications"+q,"_blank");
+var qs="?new=1&via="+via+"&sent="+today+"&url="+encodeURIComponent(url)+"&title="+encodeURIComponent(title)+"&company="+encodeURIComponent(company);
+window.open(O+"/applications"+qs,"_blank");
 }catch(e){window.open(${JSON.stringify(origin)}+"/applications?new=1","_blank");}})();`;
   return "javascript:" + encodeURIComponent(code);
 }
@@ -32,23 +43,25 @@ window.open(O+"/applications"+q,"_blank");
 function buildContactBookmarklet(origin: string): string {
   const code = `(function(){try{
 var O=${JSON.stringify(origin)};
-function t(s){try{var e=document.querySelector(s);return e?e.textContent.trim().replace(/\\s+/g," "):"";}catch(_){return"";}}
-function meta(n){var e=document.querySelector('meta[property="'+n+'"]')||document.querySelector('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
+function q(s,r){try{return (r||document).querySelector(s);}catch(_){return null;}}
+function txt(e){return e?(e.textContent||"").trim().replace(/\\s+/g," "):"";}
+function meta(n){var e=q('meta[property="'+n+'"]')||q('meta[name="'+n+'"]');return e?(e.getAttribute("content")||"").trim():"";}
 function stripLi(s){return (s||"").replace(/^\\(\\d+\\+?\\)\\s*/,"").replace(/\\s*[|\\u00b7]\\s*LinkedIn.*$/i,"").replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();}
 var name="",headline="";
 var og=stripLi(meta("og:title"));
 if(og){var parts=og.split(/\\s[-\\u2013\\u2014]\\s/);name=parts[0].trim();if(parts.length>1)headline=parts.slice(1).join(" - ").trim();}
-if(!name||/^linkedin$/i.test(name))name=t("h1");
+if(!name||/^linkedin$/i.test(name))name=txt(q("h1"));
 if(!name||/^linkedin$/i.test(name)){var ct=stripLi(document.title);var cp=ct.split(/\\s[-\\u2013\\u2014]\\s/);name=cp[0].trim();if(!headline&&cp.length>1)headline=cp.slice(1).join(" - ").trim();}
-if(!headline)headline=t(".text-body-medium.break-words")||t(".text-body-medium")||t(".pv-text-details__left-panel .text-body-medium")||"";
+if(!headline)headline=txt(q(".text-body-medium.break-words"))||txt(q(".text-body-medium"));
 headline=headline.replace(/\\s*\\|\\s*LinkedIn.*$/i,"").trim();
 var role=headline,company="";
 var m=headline.split(/\\s+(?:chez|at|@|\\u00b7|\\|)\\s+/i);
 if(m.length>1){role=m[0].trim();company=m.slice(1).join(" ").trim();}
+if(!company){var cl=q('a[href*="/company/"]');if(cl)company=txt(cl).replace(/\\s*[·|].*$/,"").trim();}
 var p=name.split(" ").filter(Boolean);var first=p.shift()||"";var last=p.join(" ");
 var url=location.href.split("?")[0];
-var q="?new=1&firstName="+encodeURIComponent(first)+"&lastName="+encodeURIComponent(last)+"&role="+encodeURIComponent(role)+"&company="+encodeURIComponent(company)+"&linkedin="+encodeURIComponent(url);
-window.open(O+"/contacts"+q,"_blank");
+var qs="?new=1&firstName="+encodeURIComponent(first)+"&lastName="+encodeURIComponent(last)+"&role="+encodeURIComponent(role)+"&company="+encodeURIComponent(company)+"&linkedin="+encodeURIComponent(url);
+window.open(O+"/contacts"+qs,"_blank");
 }catch(e){window.open(${JSON.stringify(origin)}+"/contacts?new=1","_blank");}})();`;
   return "javascript:" + encodeURIComponent(code);
 }

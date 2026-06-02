@@ -200,7 +200,7 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial, initi
 
 // Reads ?new=1&title=&company=&url=&via= and opens a prefilled create modal.
 // Wrapped in <Suspense> by the page (Next.js 16 requires it for useSearchParams).
-interface AppPrefill { jobTitle?: string; companyName?: string; sourceUrl?: string; sentVia?: string }
+interface AppPrefill { jobTitle?: string; companyName?: string; sourceUrl?: string; sentVia?: string; sentDate?: string }
 
 function PrefillReader({ onNew }: { onNew: (p: AppPrefill) => void }) {
   const params = useSearchParams();
@@ -212,6 +212,7 @@ function PrefillReader({ onNew }: { onNew: (p: AppPrefill) => void }) {
         companyName: g("company"),
         sourceUrl:   g("url"),
         sentVia:     g("via"),
+        sentDate:    g("sent"),
       });
     }
     // run once on mount
@@ -428,7 +429,7 @@ export default function ApplicationsPage() {
           companies={companies}
           sectors={sectors}
           cvList={cvList}
-          initial={prefill ? { jobTitle: prefill.jobTitle, sourceUrl: prefill.sourceUrl, sentVia: (prefill.sentVia as Application["sentVia"]) ?? undefined } : undefined}
+          initial={prefill ? { jobTitle: prefill.jobTitle, sourceUrl: prefill.sourceUrl, sentVia: (prefill.sentVia as Application["sentVia"]) ?? undefined, sentDate: prefill.sentDate } : undefined}
           initialCompanyName={prefill?.companyName}
           onSubmit={handleCreate}
           onClose={() => { setShowCreate(false); setPrefill(null); }}
