@@ -1,7 +1,32 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { companies } from "@/lib/db/schema";
+import { companies, sectors } from "@/lib/db/schema";
 import { generateId } from "@/lib/utils";
+
+// Find-or-create a sector by name for this user (mirrors resolveCompanyId).
+export async function resolveSectorId(
+  userId: string,
+  sectorName: string | null | undefined,
+  existingSectorId?: string | null,
+): Promise<string | null> {
+  if (existingSectorId) return existingSectorId;
+  if (!sectorName?.trim()) return null;
+
+  const name = sectorName.trim();
+  const existing = await db.select().from(sectors)
+    .where(and(eq(sectors.userId, userId), eq(sectors.name, name)))
+    .limit(1);
+  if (existing.length > 0) return existing[0].id;
+
+  const created = await db.insert(sectors).values({
+    id:       generateId(),
+    userId,
+    name,
+    color:    "#3D5BE3",
+    priority: 2,
+  }).returning();
+  return created[0].id;
+}
 
 export async function resolveCompanyId(
   userId: string,

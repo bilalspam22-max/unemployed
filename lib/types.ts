@@ -57,6 +57,7 @@ export interface Contact {
   lastName: string;
   role: string | null;
   email: string | null;
+  phone?: string | null;
   linkedinUrl: string | null;
   contactType: ContactType | null;
   temperature: ContactTemperature | null;

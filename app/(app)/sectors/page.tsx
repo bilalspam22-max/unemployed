@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   DndContext, DragEndEvent, DragStartEvent, DragOverlay,
   PointerSensor, useSensor, useSensors, useDroppable, useDraggable,
@@ -8,6 +8,8 @@ import {
 import { Plus, ChevronRight, GripVertical, Inbox } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/lib/store";
+import { getDraft, clearDraft, saveDraft, type DraftEntry } from "@/lib/drafts";
+import { DraftBanner } from "@/components/ui/draft-banner";
 import { statusLabel } from "@/lib/utils";
 import type { Sector, Company, Application } from "@/lib/types";
 
@@ -120,20 +122,48 @@ function FunnelBars({ sent, responded, interviews, won, color }: {
   );
 }
 
-function SectorForm({ onSubmit, onClose, initial }: {
+function SectorForm({ onSubmit, onClose, initial, draftEnabled }: {
   onSubmit: (d: Partial<Sector>) => Promise<void>;
   onClose: () => void;
   initial?: Partial<Sector>;
+  draftEnabled?: boolean;
 }) {
-  const [name, setName]       = useState(initial?.name ?? "");
-  const [color, setColor]     = useState(initial?.color ?? SECTOR_COLORS[0]);
-  const [priority, setPriority] = useState(initial?.priority ?? 2);
-  const [saving, setSaving]   = useState(false);
+  const isCreate = draftEnabled && !initial?.id;
+  const saved = isCreate ? getDraft("sector") : null;
+
+  const [name, setName]         = useState((saved?.data?.name as string) ?? initial?.name ?? "");
+  const [color, setColor]       = useState((saved?.data?.color as string) ?? initial?.color ?? SECTOR_COLORS[0]);
+  const [priority, setPriority] = useState((saved?.data?.priority as number) ?? initial?.priority ?? 2);
+  const [saving, setSaving]     = useState(false);
+  const doneRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const firstRenderRef = useRef(true);
+  const dataRef = useRef({ name, color, priority });
+  useEffect(() => { dataRef.current = { name, color, priority }; });
+
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    isDirtyRef.current = true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, color, priority]);
+  useEffect(() => {
+    if (!isCreate || !isDirtyRef.current) return;
+    const t = setTimeout(() => saveDraft("sector", dataRef.current, dataRef.current.name || "Nouveau secteur"), 1200);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, color, priority]);
+  useEffect(() => () => {
+    if (!isCreate || !isDirtyRef.current || doneRef.current) return;
+    saveDraft("sector", dataRef.current, dataRef.current.name || "Nouveau secteur");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handle(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     await onSubmit({ name, color, priority });
+    doneRef.current = true;
+    if (isCreate) clearDraft("sector");
     setSaving(false);
     onClose();
   }
@@ -165,7 +195,7 @@ function SectorForm({ onSubmit, onClose, initial }: {
         </select>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="button" className="btn" onClick={() => { doneRef.current = true; if (isCreate) clearDraft("sector"); onClose(); }}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? "Enregistrement…" : initial ? "Mettre à jour" : "Créer"}
         </button>
@@ -233,7 +263,10 @@ export default function SectorsPage() {
   const [editing, setEditing]     = useState<Sector | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [activeApp, setActiveApp] = useState<Application | null>(null);
+  const [draft, setDraft] = useState<DraftEntry | null>(null);
   const { showToast } = useToast();
+
+  useEffect(() => { setDraft(getDraft("sector")); }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -314,6 +347,14 @@ export default function SectorsPage() {
         </button>
       </div>
 
+      {draft && (
+        <DraftBanner
+          draft={draft}
+          onResume={() => { setDraft(null); setShowCreate(true); }}
+          onDiscard={() => { clearDraft("sector"); setDraft(null); }}
+        />
+      )}
+
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* ── Bac : candidatures à trier (sans secteur) ── */}
         <TriageTray apps={unsortedApps} companyMap={companyMap} hasSectors={sectors.length > 0} />
@@ -354,8 +395,8 @@ export default function SectorsPage() {
         </Modal>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau secteur">
-        <SectorForm onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("sector")), 50); }} title="Nouveau secteur">
+        <SectorForm draftEnabled onSubmit={handleCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("sector")), 50); }} />
       </Modal>
     </div>
   );

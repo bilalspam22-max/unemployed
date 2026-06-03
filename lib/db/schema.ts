@@ -94,6 +94,7 @@ export const contacts = sqliteTable("contact", {
   lastName:            text("lastName").notNull(),
   role:                text("role"),
   email:               text("email"),
+  phone:               text("phone"),
   linkedinUrl:         text("linkedinUrl"),
   contactType:         text("contactType", {
     enum: ["recruiter", "consultant", "engineer", "acquaintance", "referral"],

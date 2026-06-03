@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { requireAuth, ok, err } from "@/lib/api-helpers";
 import { generateId } from "@/lib/utils";
-import { resolveCompanyId } from "./company-resolver";
+import { resolveCompanyId, resolveSectorId } from "./company-resolver";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -14,10 +14,12 @@ const createSchema = z.object({
   // Inline company creation — if provided, auto-creates/finds company
   companyName:         z.string().nullable().optional(),
   companySectorId:     z.string().nullable().optional(),
+  companySectorName:   z.string().nullable().optional(),
   companyLocation:     z.string().nullable().optional(),
   companyWebsite:      z.string().nullable().optional(),
   role:                z.string().nullable().optional(),
   email:               z.string().email().nullable().optional(),
+  phone:               z.string().nullable().optional(),
   linkedinUrl:         z.string().nullable().optional(),
   contactType:         z.enum(["recruiter","consultant","engineer","acquaintance","referral"]).nullable().optional(),
   temperature:         z.enum(["cold","warm","hot"]).optional(),
@@ -44,12 +46,13 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.message);
 
-  const { companyName, companySectorId, companyLocation, companyWebsite, companyId, ...rest } = parsed.data;
+  const { companyName, companySectorId, companySectorName, companyLocation, companyWebsite, companyId, ...rest } = parsed.data;
 
+  const resolvedSectorId = await resolveSectorId(session!.user.id, companySectorName, companySectorId);
   const resolvedCompanyId = await resolveCompanyId(
     session!.user.id,
     companyName,
-    companySectorId,
+    resolvedSectorId,
     companyLocation,
     companyWebsite,
     companyId,

@@ -7,6 +7,8 @@ import { Drawer } from "@/components/ui/drawer";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/lib/store";
+import { getDraft, clearDraft, saveDraft, type DraftEntry } from "@/lib/drafts";
+import { DraftBanner } from "@/components/ui/draft-banner";
 import type { CV, Sector } from "@/lib/types";
 
 function CVCard({ cv, sector, onClick }: { cv: CV; sector: Sector | undefined; onClick: () => void }) {
@@ -49,25 +51,58 @@ function CVCard({ cv, sector, onClick }: { cv: CV; sector: Sector | undefined; o
   );
 }
 
-function CVForm({ sectors, onSubmit, onClose, initial }: {
+function CVForm({ sectors, onSubmit, onClose, initial, draftEnabled }: {
   sectors: Sector[];
   onSubmit: (d: Partial<CV>, file: File | null) => Promise<void>;
   onClose: () => void;
   initial?: Partial<CV>;
+  draftEnabled?: boolean;
 }) {
-  const [d, setD] = useState({
-    sectorId:             initial?.sectorId ?? "",
-    versionNumber:        initial?.versionNumber ?? 1,
-    lastUpdated:          initial?.lastUpdated ?? new Date().toISOString().slice(0, 10),
-    pdfUrl:               initial?.pdfUrl ?? "",
-    mainKeywords:         (initial?.mainKeywords ?? []).join(", "),
-    strengthsToHighlight: (initial?.strengthsToHighlight ?? []).join("\n"),
+  const isCreate = draftEnabled && !initial?.id;
+
+  const [d, setD] = useState(() => {
+    const base = {
+      sectorId:             initial?.sectorId ?? "",
+      versionNumber:        initial?.versionNumber ?? 1,
+      lastUpdated:          initial?.lastUpdated ?? new Date().toISOString().slice(0, 10),
+      pdfUrl:               initial?.pdfUrl ?? "",
+      mainKeywords:         (initial?.mainKeywords ?? []).join(", "),
+      strengthsToHighlight: (initial?.strengthsToHighlight ?? []).join("\n"),
+    };
+    if (isCreate) {
+      const saved = getDraft("cv");
+      if (saved?.data) return { ...base, ...(saved.data as typeof base) };
+    }
+    return base;
   });
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
+  const doneRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const firstRenderRef = useRef(true);
+  const dRef = useRef(d);
+  useEffect(() => { dRef.current = d; }, [d]);
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    isDirtyRef.current = true;
+  }, [d]);
+  useEffect(() => {
+    if (!isCreate || !isDirtyRef.current) return;
+    const sector = sectors.find(s => s.id === dRef.current.sectorId);
+    const label = sector ? `CV ${sector.name}` : "Nouveau CV";
+    const t = setTimeout(() => saveDraft("cv", dRef.current, label), 1200);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
+  useEffect(() => () => {
+    if (!isCreate || !isDirtyRef.current || doneRef.current) return;
+    const sector = sectors.find(s => s.id === dRef.current.sectorId);
+    saveDraft("cv", dRef.current, sector ? `CV ${sector.name}` : "Nouveau CV");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hasExistingFile = !!initial?.pdfUrl && initial.pdfUrl.startsWith("/api/cvs/");
 
@@ -89,6 +124,8 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
       mainKeywords:         d.mainKeywords.split(",").map(k => k.trim()).filter(Boolean),
       strengthsToHighlight: d.strengthsToHighlight.split("\n").map(s => s.trim()).filter(Boolean),
     }, file);
+    doneRef.current = true;
+    if (isCreate) clearDraft("cv");
     setSaving(false);
     onClose();
   }
@@ -169,7 +206,7 @@ function CVForm({ sectors, onSubmit, onClose, initial }: {
         <textarea className="input" value={d.strengthsToHighlight} onChange={e => up("strengthsToHighlight", e.target.value)} rows={4} placeholder="5 ans d'expérience en automatisme industriel&#10;Maîtrise EPLAN P8..." />
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="button" className="btn" onClick={() => { doneRef.current = true; if (isCreate) clearDraft("cv"); onClose(); }}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? "Enregistrement…" : initial?.id ? "Mettre à jour" : "Créer"}
         </button>
@@ -184,7 +221,10 @@ export default function CVsPage() {
   const [selected, setSelected] = useState<CV | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [draft, setDraft] = useState<DraftEntry | null>(null);
   const { showToast } = useToast();
+
+  useEffect(() => { setDraft(getDraft("cv")); }, []);
 
   const load = useCallback(() => {
     fetch("/api/cvs").then(r => r.json()).then(r => setCvList(Array.isArray(r.data) ? r.data : [])).catch(() => {});
@@ -254,6 +294,14 @@ export default function CVsPage() {
         </button>
       </div>
 
+      {draft && (
+        <DraftBanner
+          draft={draft}
+          onResume={() => { setDraft(null); setShowCreate(true); }}
+          onDiscard={() => { clearDraft("cv"); setDraft(null); }}
+        />
+      )}
+
       {cvList.length === 0 ? (
         <EmptyState
           icon={FileText}
@@ -313,8 +361,8 @@ export default function CVsPage() {
         </Drawer>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau CV" size="lg">
-        <CVForm sectors={sectors} onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("cv")), 50); }} title="Nouveau CV" size="lg">
+        <CVForm sectors={sectors} draftEnabled onSubmit={handleCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("cv")), 50); }} />
       </Modal>
 
       <ConfirmDialog

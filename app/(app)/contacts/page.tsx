@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Send, Star, History, ChevronDown, ChevronUp, MessageSquare, MessageCircleReply } from "lucide-react";
+import { Plus, Send, Star, History, ChevronDown, ChevronUp, MessageSquare, MessageCircleReply, Phone, Mail, Link2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { TempDot, Badge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/drawer";
@@ -13,11 +13,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/lib/store";
 import { Users as UsersIcon, Search } from "lucide-react";
 import { relativeDate, formatDate } from "@/lib/utils";
+import { getDraft, clearDraft, saveDraft, type DraftEntry } from "@/lib/drafts";
+import { DraftBanner } from "@/components/ui/draft-banner";
 import type { Contact, Followup, Sector } from "@/lib/types";
 
 interface ContactFormData extends Omit<Partial<Contact>, "id"> {
   companyName?: string;
   companySectorId?: string;
+  companySectorName?: string;
   companyLocation?: string;
   companyWebsite?: string;
 }
@@ -26,35 +29,68 @@ type Filter = "all" | "hot" | "followup" | "week";
 
 // ─── Contact Form ─────────────────────────────────────────────────────────────
 
-function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initialCompanyName }: {
+function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initialCompanyName, draftEnabled }: {
   onSubmit: (data: ContactFormData) => Promise<void>;
   onClose: () => void;
   initial?: Partial<Contact>;
   sectors?: Sector[];
   companyNames?: string[];
   initialCompanyName?: string;
+  draftEnabled?: boolean;
 }) {
-  const [d, setD] = useState({
-    firstName:    initial?.firstName ?? "",
-    lastName:     initial?.lastName  ?? "",
-    role:         initial?.role      ?? "",
-    email:        initial?.email     ?? "",
-    linkedinUrl:  initial?.linkedinUrl ?? "",
-    contactType:  initial?.contactType ?? "recruiter",
-    temperature:  initial?.temperature ?? "cold",
-    humanNotes:   initial?.humanNotes  ?? "",
-    nextFollowupDate: initial?.nextFollowupDate ?? "",
-    lastExchangeDate: initial?.lastExchangeDate ?? "",
-    lastExchangeSummary: initial?.lastExchangeSummary ?? "",
-    signalDetected: initial?.signalDetected ?? "",
-    trustLevel:   initial?.trustLevel ?? 3,
-    // Company fields
-    companyName:      initialCompanyName ?? "",
-    companySectorId:  "",
-    companyLocation:  "",
-    companyWebsite:   "",
+  const isCreate = draftEnabled && !initial?.id;
+
+  const [d, setD] = useState(() => {
+    const base = {
+      firstName:    initial?.firstName ?? "",
+      lastName:     initial?.lastName  ?? "",
+      role:         initial?.role      ?? "",
+      email:        initial?.email     ?? "",
+      phone:        initial?.phone     ?? "",
+      linkedinUrl:  initial?.linkedinUrl ?? "",
+      contactType:  initial?.contactType ?? "recruiter",
+      temperature:  initial?.temperature ?? "cold",
+      humanNotes:   initial?.humanNotes  ?? "",
+      nextFollowupDate: initial?.nextFollowupDate ?? "",
+      lastExchangeDate: initial?.lastExchangeDate ?? "",
+      lastExchangeSummary: initial?.lastExchangeSummary ?? "",
+      signalDetected: initial?.signalDetected ?? "",
+      trustLevel:   initial?.trustLevel ?? 3,
+      companyName:      initialCompanyName ?? "",
+      companySectorName: "",
+      companyLocation:  "",
+      companyWebsite:   "",
+    };
+    if (isCreate) {
+      const saved = getDraft("contact");
+      if (saved?.data) return { ...base, ...(saved.data as typeof base) };
+    }
+    return base;
   });
   const [saving, setSaving] = useState(false);
+  const doneRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const dRef = useRef(d);
+  const firstRenderRef = useRef(true);
+
+  useEffect(() => { dRef.current = d; }, [d]);
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    isDirtyRef.current = true;
+  }, [d]);
+  useEffect(() => {
+    if (!isCreate || !isDirtyRef.current) return;
+    const label = [dRef.current.firstName, dRef.current.lastName].filter(Boolean).join(" ") || "Nouveau contact";
+    const t = setTimeout(() => saveDraft("contact", dRef.current, label), 1200);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
+  useEffect(() => () => {
+    if (!isCreate || !isDirtyRef.current || doneRef.current) return;
+    const label = [dRef.current.firstName, dRef.current.lastName].filter(Boolean).join(" ") || "Nouveau contact";
+    saveDraft("contact", dRef.current, label);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function up(key: string, val: unknown) { setD(prev => ({ ...prev, [key]: val })); }
 
@@ -67,17 +103,20 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
       ...d,
       role:        d.role || null,
       email:       d.email || null,
+      phone:       d.phone || null,
       linkedinUrl: d.linkedinUrl || null,
       humanNotes:  d.humanNotes || null,
       nextFollowupDate: d.nextFollowupDate || null,
       lastExchangeDate: d.lastExchangeDate || null,
       lastExchangeSummary: d.lastExchangeSummary || null,
       signalDetected: d.signalDetected || null,
-      companyName:     d.companyName || undefined,
-      companySectorId: d.companySectorId || undefined,
-      companyLocation: d.companyLocation || undefined,
-      companyWebsite:  d.companyWebsite || undefined,
+      companyName:       d.companyName || undefined,
+      companySectorName: d.companySectorName || undefined,
+      companyLocation:   d.companyLocation || undefined,
+      companyWebsite:    d.companyWebsite || undefined,
     });
+    doneRef.current = true;
+    if (isCreate) clearDraft("contact");
     setSaving(false);
     onClose();
   }
@@ -117,9 +156,13 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
           <input className="input" type="email" value={d.email} onChange={e => up("email", e.target.value)} />
         </div>
         <div className="field">
-          <label className="label">LinkedIn URL</label>
-          <input className="input" value={d.linkedinUrl} onChange={e => up("linkedinUrl", e.target.value)} placeholder="https://linkedin.com/in/..." />
+          <label className="label">Téléphone</label>
+          <input className="input" type="tel" value={d.phone} onChange={e => up("phone", e.target.value)} placeholder="+33 6 12 34 56 78" />
         </div>
+      </div>
+      <div className="field">
+        <label className="label">LinkedIn URL</label>
+        <input className="input" value={d.linkedinUrl} onChange={e => up("linkedinUrl", e.target.value)} placeholder="https://linkedin.com/in/..." />
       </div>
 
       {/* ── Entreprise ── */}
@@ -150,10 +193,17 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
         </div>
         <div className="field">
           <label className="label">Secteur (si nouvelle)</label>
-          <select className="input" value={d.companySectorId} onChange={e => up("companySectorId", e.target.value)} disabled={companyIsKnown || !d.companyName}>
-            <option value="">— Aucun —</option>
-            {(sectors ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <input
+            className="input"
+            list="contact-sector-list"
+            value={d.companySectorName}
+            onChange={e => up("companySectorName", e.target.value)}
+            disabled={companyIsKnown || !d.companyName}
+            placeholder="Tape un secteur…"
+          />
+          <datalist id="contact-sector-list">
+            {(sectors ?? []).map(s => <option key={s.id} value={s.name} />)}
+          </datalist>
         </div>
       </div>
 
@@ -199,7 +249,7 @@ function ContactForm({ onSubmit, onClose, initial, sectors, companyNames, initia
         <textarea className="input" value={d.humanNotes} onChange={e => up("humanNotes", e.target.value)} rows={2} />
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="button" className="btn" onClick={() => { doneRef.current = true; if (isCreate) clearDraft("contact"); onClose(); }}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? "Enregistrement…" : initial?.id ? "Mettre à jour" : "Créer"}
         </button>
@@ -414,7 +464,10 @@ export default function ContactsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading]     = useState(true);
   const [archiveTarget, setArchiveTarget] = useState<Contact | null>(null);
+  const [draft, setDraft] = useState<DraftEntry | null>(null);
   const { showToast } = useToast();
+
+  useEffect(() => { setDraft(getDraft("contact")); }, []);
 
   const load = useCallback(async () => {
     try {
@@ -440,7 +493,7 @@ export default function ContactsPage() {
     const json = await resp.json();
     if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la création", "error"); return; }
     setContacts(prev => [json.data, ...prev]);
-    if (data.companyName) load(); // refresh company map
+    if (data.companyName || data.companySectorName) load(); // refresh company/sector lists
     showToast("Contact créé ✓");
   }
 
@@ -451,7 +504,7 @@ export default function ContactsPage() {
     if (!resp.ok || !json.data) { showToast(json.error ?? "Erreur lors de la mise à jour", "error"); return; }
     setContacts(prev => prev.map(c => c.id === json.data.id ? json.data : c));
     setSelected(json.data);
-    if (data.companyName) load(); // refresh company map
+    if (data.companyName || data.companySectorName) load(); // refresh company/sector lists
     showToast("Contact mis à jour ✓");
   }
 
@@ -558,6 +611,14 @@ export default function ContactsPage() {
         </button>
       </div>
 
+      {draft && (
+        <DraftBanner
+          draft={draft}
+          onResume={() => { setDraft(null); setPrefill(null); setShowCreate(true); }}
+          onDiscard={() => { clearDraft("contact"); setDraft(null); }}
+        />
+      )}
+
       {/* Toolbar */}
       <div className="toolbar">
         <div className="search">
@@ -660,6 +721,29 @@ export default function ContactsPage() {
               </Badge>
             </div>
 
+            {(selected.phone || selected.email || selected.linkedinUrl) && (
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-title">Coordonnées</div>
+                <div className="col gap-2">
+                  {selected.phone && (
+                    <a href={`tel:${selected.phone}`} className="row gap-2" style={{ fontSize: 13, color: "var(--ink)", textDecoration: "none" }}>
+                      <Phone size={13} color="var(--success)" /> {selected.phone}
+                    </a>
+                  )}
+                  {selected.email && (
+                    <a href={`mailto:${selected.email}`} className="row gap-2" style={{ fontSize: 13, color: "var(--ink)", textDecoration: "none" }}>
+                      <Mail size={13} color="var(--primary)" /> {selected.email}
+                    </a>
+                  )}
+                  {selected.linkedinUrl && (
+                    <a href={selected.linkedinUrl} target="_blank" rel="noopener noreferrer" className="row gap-2" style={{ fontSize: 13, color: "var(--ink)", textDecoration: "none" }}>
+                      <Link2 size={13} color="var(--info)" /> Profil LinkedIn
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
             {selected.lastExchangeSummary && (
               <div style={{ marginBottom: 16 }}>
                 <div className="section-title">Dernier échange</div>
@@ -753,13 +837,14 @@ export default function ContactsPage() {
       )}
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); setPrefill(null); }} title="Nouveau contact" size="lg">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setPrefill(null); setTimeout(() => setDraft(getDraft("contact")), 50); }} title="Nouveau contact" size="lg">
         <ContactForm
           key={prefill ? "prefilled" : "blank"}
           initial={prefill ? { firstName: prefill.firstName, lastName: prefill.lastName, role: prefill.role, linkedinUrl: prefill.linkedinUrl } : undefined}
           initialCompanyName={prefill?.companyName}
+          draftEnabled
           onSubmit={handleCreate}
-          onClose={() => { setShowCreate(false); setPrefill(null); }}
+          onClose={() => { setShowCreate(false); setPrefill(null); setTimeout(() => setDraft(getDraft("contact")), 50); }}
           sectors={sectors}
           companyNames={Object.values(companyMap)}
         />

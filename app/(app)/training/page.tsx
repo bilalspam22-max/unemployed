@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Plus, GraduationCap } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/lib/store";
+import { getDraft, clearDraft, saveDraft, type DraftEntry } from "@/lib/drafts";
+import { DraftBanner } from "@/components/ui/draft-banner";
 import type { Training, Sector } from "@/lib/types";
 
 const ROI_LABEL = { high: "ROI Élevé", medium: "ROI Moyen", low: "ROI Faible" };
@@ -34,26 +36,56 @@ function TrainingCard({ training, sector, onEdit }: { training: Training; sector
   );
 }
 
-function TrainingForm({ sectors, onSubmit, onClose, initial }: {
+function TrainingForm({ sectors, onSubmit, onClose, initial, draftEnabled }: {
   sectors: Sector[];
   onSubmit: (d: Partial<Training>) => Promise<void>;
   onClose: () => void;
   initial?: Partial<Training>;
+  draftEnabled?: boolean;
 }) {
-  const [d, setD] = useState({
-    name:                   initial?.name ?? "",
-    sectorId:               initial?.sectorId ?? "",
-    provider:               initial?.provider ?? "",
-    durationHours:          initial?.durationHours ?? "",
-    price:                  initial?.price ?? "",
-    certificationAvailable: initial?.certificationAvailable ?? false,
-    marketRecognition:      initial?.marketRecognition ?? "medium",
-    priority:               initial?.priority ?? 2,
-    status:                 initial?.status ?? "to_analyze",
-    roiEstimated:           initial?.roiEstimated ?? "medium",
+  const isCreate = draftEnabled && !initial?.id;
+
+  const [d, setD] = useState(() => {
+    const base = {
+      name:                   initial?.name ?? "",
+      sectorId:               initial?.sectorId ?? "",
+      provider:               initial?.provider ?? "",
+      durationHours:          initial?.durationHours ?? "",
+      price:                  initial?.price ?? "",
+      certificationAvailable: initial?.certificationAvailable ?? false,
+      marketRecognition:      initial?.marketRecognition ?? "medium",
+      priority:               initial?.priority ?? 2,
+      status:                 initial?.status ?? "to_analyze",
+      roiEstimated:           initial?.roiEstimated ?? "medium",
+    };
+    if (isCreate) {
+      const saved = getDraft("training");
+      if (saved?.data) return { ...base, ...(saved.data as typeof base) };
+    }
+    return base;
   });
   const [saving, setSaving] = useState(false);
   const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
+  const doneRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const firstRenderRef = useRef(true);
+  const dRef = useRef(d);
+  useEffect(() => { dRef.current = d; }, [d]);
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    isDirtyRef.current = true;
+  }, [d]);
+  useEffect(() => {
+    if (!isCreate || !isDirtyRef.current) return;
+    const t = setTimeout(() => saveDraft("training", dRef.current, dRef.current.name || "Nouvelle formation"), 1200);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
+  useEffect(() => () => {
+    if (!isCreate || !isDirtyRef.current || doneRef.current) return;
+    saveDraft("training", dRef.current, dRef.current.name || "Nouvelle formation");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handle(e: React.FormEvent) {
     e.preventDefault();
@@ -70,6 +102,8 @@ function TrainingForm({ sectors, onSubmit, onClose, initial }: {
       status:                 d.status as Training["status"],
       roiEstimated:           d.roiEstimated as Training["roiEstimated"],
     });
+    doneRef.current = true;
+    if (isCreate) clearDraft("training");
     setSaving(false);
     onClose();
   }
@@ -137,7 +171,7 @@ function TrainingForm({ sectors, onSubmit, onClose, initial }: {
         </label>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="button" className="btn" onClick={() => { doneRef.current = true; if (isCreate) clearDraft("training"); onClose(); }}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? "Enregistrement…" : initial ? "Mettre à jour" : "Créer"}
         </button>
@@ -151,7 +185,10 @@ export default function TrainingPage() {
   const [sectors, setSectors]     = useState<Sector[]>([]);
   const [editing, setEditing]     = useState<Training | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [draft, setDraft] = useState<DraftEntry | null>(null);
   const { showToast } = useToast();
+
+  useEffect(() => { setDraft(getDraft("training")); }, []);
 
   const load = useCallback(() => {
     fetch("/api/trainings").then(r => r.json()).then(r => setTrainings(r.data ?? []));
@@ -198,6 +235,14 @@ export default function TrainingPage() {
         </button>
       </div>
 
+      {draft && (
+        <DraftBanner
+          draft={draft}
+          onResume={() => { setDraft(null); setShowCreate(true); }}
+          onDiscard={() => { clearDraft("training"); setDraft(null); }}
+        />
+      )}
+
       <div className="sector-grid">
         {trainings.map(t => (
           <TrainingCard key={t.id} training={t} sector={sectorMap[t.sectorId ?? ""]} onEdit={() => setEditing(t)} />
@@ -220,8 +265,8 @@ export default function TrainingPage() {
         </Modal>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouvelle formation" size="lg">
-        <TrainingForm sectors={sectors} onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("training")), 50); }} title="Nouvelle formation" size="lg">
+        <TrainingForm sectors={sectors} draftEnabled onSubmit={handleCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("training")), 50); }} />
       </Modal>
     </div>
   );

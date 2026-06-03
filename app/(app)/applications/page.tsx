@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus, Calendar, ExternalLink } from "lucide-react";
 import { KanbanBoard } from "@/components/ui/kanban";
@@ -12,6 +12,8 @@ import { KanbanSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/lib/store";
 import { celebrate } from "@/lib/confetti";
 import { formatDateShort } from "@/lib/utils";
+import { getDraft, clearDraft, saveDraft, type DraftEntry } from "@/lib/drafts";
+import { DraftBanner } from "@/components/ui/draft-banner";
 import type { Application, Company, Sector, CV } from "@/lib/types";
 
 interface AppFormData extends Partial<Application> {
@@ -49,7 +51,7 @@ function AppCard({ app, companies }: { app: Application; companies: Company[] })
   );
 }
 
-function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial, initialCompanyName }: {
+function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial, initialCompanyName, draftEnabled }: {
   companies: Company[];
   sectors: Sector[];
   cvList: CV[];
@@ -57,28 +59,58 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial, initi
   onClose: () => void;
   initial?: Partial<Application>;
   initialCompanyName?: string;
+  draftEnabled?: boolean;
 }) {
-  // Resolve a prefilled company name against existing companies
+  const isCreate = draftEnabled && !initial?.id;
+
   const matched = initialCompanyName
     ? companies.find(c => c.name.toLowerCase() === initialCompanyName.toLowerCase())
     : null;
 
-  const [d, setD] = useState({
-    jobTitle:     initial?.jobTitle    ?? "",
-    companyId:    initial?.companyId   ?? matched?.id ?? "",
-    companyName:  matched ? "" : (initialCompanyName ?? ""),
-    sectorId:     initial?.sectorId    ?? "",
-    cvUsedId:     initial?.cvUsedId    ?? "",
-    sentDate:     initial?.sentDate    ?? "",
-    sourceUrl:    initial?.sourceUrl   ?? "",
-    messageSent:  initial?.messageSent ?? "",
-    sentVia:      initial?.sentVia     ?? "email",
-    status:       initial?.status      ?? "to_prepare",
-    nextAction:   initial?.nextAction  ?? "",
+  const [d, setD] = useState(() => {
+    const base = {
+      jobTitle:     initial?.jobTitle    ?? "",
+      companyId:    initial?.companyId   ?? matched?.id ?? "",
+      companyName:  matched ? "" : (initialCompanyName ?? ""),
+      sectorId:     initial?.sectorId    ?? "",
+      cvUsedId:     initial?.cvUsedId    ?? "",
+      sentDate:     initial?.sentDate    ?? "",
+      sourceUrl:    initial?.sourceUrl   ?? "",
+      messageSent:  initial?.messageSent ?? "",
+      sentVia:      initial?.sentVia     ?? "email",
+      status:       initial?.status      ?? "to_prepare",
+      nextAction:   initial?.nextAction  ?? "",
+    };
+    if (isCreate) {
+      const saved = getDraft("application");
+      if (saved?.data) return { ...base, ...(saved.data as typeof base) };
+    }
+    return base;
   });
   const [isNewCompany, setIsNewCompany] = useState(!!initialCompanyName && !matched);
   const [saving, setSaving] = useState(false);
   const up = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }));
+  const doneRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const dRef = useRef(d);
+  const firstRenderRef = useRef(true);
+
+  useEffect(() => { dRef.current = d; }, [d]);
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    isDirtyRef.current = true;
+  }, [d]);
+  useEffect(() => {
+    if (!isCreate || !isDirtyRef.current) return;
+    const t = setTimeout(() => saveDraft("application", dRef.current, dRef.current.jobTitle || "Nouvelle candidature"), 1200);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
+  useEffect(() => () => {
+    if (!isCreate || !isDirtyRef.current || doneRef.current) return;
+    saveDraft("application", dRef.current, dRef.current.jobTitle || "Nouvelle candidature");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handle(e: React.FormEvent) {
     e.preventDefault();
@@ -96,6 +128,8 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial, initi
       messageSent: d.messageSent || null,
       nextAction:  d.nextAction  || null,
     });
+    doneRef.current = true;
+    if (isCreate) clearDraft("application");
     setSaving(false);
     onClose();
   }
@@ -189,7 +223,7 @@ function AppForm({ companies, sectors, cvList, onSubmit, onClose, initial, initi
         <input className="input" value={d.nextAction} onChange={e => up("nextAction", e.target.value)} placeholder="Relancer le 15 mai..." />
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="button" className="btn" onClick={() => { doneRef.current = true; if (isCreate) clearDraft("application"); onClose(); }}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? "Enregistrement…" : initial?.id ? "Mettre à jour" : "Créer"}
         </button>
@@ -233,7 +267,10 @@ export default function ApplicationsPage() {
   const [loadingAI, setLoadingAI] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<DraftEntry | null>(null);
   const { showToast } = useToast();
+
+  useEffect(() => { setDraft(getDraft("application")); }, []);
 
   const load = useCallback(async () => {
     try {
@@ -335,6 +372,14 @@ export default function ApplicationsPage() {
         </button>
       </div>
 
+      {draft && (
+        <DraftBanner
+          draft={draft}
+          onResume={() => { setDraft(null); setPrefill(null); setShowCreate(true); }}
+          onDiscard={() => { clearDraft("application"); setDraft(null); }}
+        />
+      )}
+
       {loading ? (
         <KanbanSkeleton columns={8} cardsPerCol={2} />
       ) : (
@@ -423,7 +468,7 @@ export default function ApplicationsPage() {
         </Drawer>
       )}
 
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); setPrefill(null); }} title="Nouvelle candidature" size="lg">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setPrefill(null); setTimeout(() => setDraft(getDraft("application")), 50); }} title="Nouvelle candidature" size="lg">
         <AppForm
           key={prefill ? "prefilled" : "blank"}
           companies={companies}
@@ -431,8 +476,9 @@ export default function ApplicationsPage() {
           cvList={cvList}
           initial={prefill ? { jobTitle: prefill.jobTitle, sourceUrl: prefill.sourceUrl, sentVia: (prefill.sentVia as Application["sentVia"]) ?? undefined, sentDate: prefill.sentDate } : undefined}
           initialCompanyName={prefill?.companyName}
+          draftEnabled
           onSubmit={handleCreate}
-          onClose={() => { setShowCreate(false); setPrefill(null); }}
+          onClose={() => { setShowCreate(false); setPrefill(null); setTimeout(() => setDraft(getDraft("application")), 50); }}
         />
       </Modal>
 

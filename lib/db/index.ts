@@ -25,6 +25,7 @@ function ensureColumns() {
     { table: "application", column: "sourceUrl",            ddl: "ALTER TABLE application ADD COLUMN sourceUrl text" },
     { table: "followup",    column: "myMessage",            ddl: "ALTER TABLE followup ADD COLUMN myMessage text" },
     { table: "followup",    column: "interlocutorResponse", ddl: "ALTER TABLE followup ADD COLUMN interlocutorResponse text" },
+    { table: "contact",     column: "phone",                ddl: "ALTER TABLE contact ADD COLUMN phone text" },
   ];
   for (const { table, column, ddl } of additive) {
     try {

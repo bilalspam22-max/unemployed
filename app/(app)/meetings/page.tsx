@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Plus, CalendarCheck, Search, ChevronDown, ChevronUp,
   Building2, User, Briefcase, Smile, Meh, Frown,
@@ -14,6 +14,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/store";
 import { formatDate } from "@/lib/utils";
+import { getDraft, clearDraft, saveDraft, type DraftEntry } from "@/lib/drafts";
+import { DraftBanner } from "@/components/ui/draft-banner";
 import type { Meeting, QuestionItem, Company, Contact, Application } from "@/lib/types";
 
 // ─── Default questions ──────────────────────────────────────────────────────
@@ -43,35 +45,66 @@ type Filter = "all" | "positive" | "neutral" | "negative";
 
 // ─── Meeting Form ───────────────────────────────────────────────────────────
 
-function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applications }: {
+function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applications, draftEnabled }: {
   onSubmit: (data: Partial<Meeting>) => Promise<void>;
   onClose: () => void;
   initial?: Partial<Meeting>;
   companies: Company[];
   contacts: Contact[];
   applications: Application[];
+  draftEnabled?: boolean;
 }) {
-  const [d, setD] = useState({
-    title:         initial?.title ?? "",
-    date:          initial?.date ?? new Date().toISOString().slice(0, 10),
-    companyId:     initial?.companyId ?? "",
-    contactId:     initial?.contactId ?? "",
-    applicationId: initial?.applicationId ?? "",
-    companyInfo:   initial?.companyInfo ?? "",
-    myPitch:       initial?.myPitch ?? "",
-    jobMentioned:  initial?.jobMentioned ?? "",
-    sentiment:     initial?.sentiment ?? "neutral",
-    sentimentNotes: initial?.sentimentNotes ?? "",
-    nextSteps:     initial?.nextSteps ?? "",
-    notes:         initial?.notes ?? "",
+  const isCreate = draftEnabled && !initial?.id;
+  const saved = isCreate ? getDraft("meeting") : null;
+
+  const [d, setD] = useState(() => {
+    const base = {
+      title:         initial?.title ?? "",
+      date:          initial?.date ?? new Date().toISOString().slice(0, 10),
+      companyId:     initial?.companyId ?? "",
+      contactId:     initial?.contactId ?? "",
+      applicationId: initial?.applicationId ?? "",
+      companyInfo:   initial?.companyInfo ?? "",
+      myPitch:       initial?.myPitch ?? "",
+      jobMentioned:  initial?.jobMentioned ?? "",
+      sentiment:     initial?.sentiment ?? "neutral",
+      sentimentNotes: initial?.sentimentNotes ?? "",
+      nextSteps:     initial?.nextSteps ?? "",
+      notes:         initial?.notes ?? "",
+    };
+    if (saved?.data) return { ...base, ...(saved.data as typeof base) };
+    return base;
   });
 
-  const [questions, setQuestions] = useState<QuestionItem[]>(
-    initial?.questionsData?.length ? initial.questionsData : DEFAULT_QUESTIONS.map(q => ({ ...q }))
-  );
+  const [questions, setQuestions] = useState<QuestionItem[]>(() => {
+    if (saved?.data?.questionsData) return saved.data.questionsData as QuestionItem[];
+    return initial?.questionsData?.length ? initial.questionsData : DEFAULT_QUESTIONS.map(q => ({ ...q }));
+  });
   const [customQ, setCustomQ] = useState("");
   const [saving, setSaving] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>("info");
+  const doneRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const firstRenderRef = useRef(true);
+  const dRef = useRef(d);
+  const questionsRef = useRef(questions);
+  useEffect(() => { dRef.current = d; }, [d]);
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    isDirtyRef.current = true;
+  }, [d, questions]);
+  useEffect(() => {
+    if (!isCreate || !isDirtyRef.current) return;
+    const t = setTimeout(() => saveDraft("meeting", { ...dRef.current, questionsData: questionsRef.current }, dRef.current.title || "Nouvelle réunion"), 1200);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d, questions]);
+  useEffect(() => () => {
+    if (!isCreate || !isDirtyRef.current || doneRef.current) return;
+    saveDraft("meeting", { ...dRef.current, questionsData: questionsRef.current }, dRef.current.title || "Nouvelle réunion");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function up(key: string, val: unknown) { setD(prev => ({ ...prev, [key]: val })); }
 
@@ -110,6 +143,8 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
       notes: d.notes || null,
       questionsData: questions,
     });
+    doneRef.current = true;
+    if (isCreate) clearDraft("meeting");
     setSaving(false);
     onClose();
   }
@@ -301,7 +336,7 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
       </div>
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="button" className="btn" onClick={() => { doneRef.current = true; if (isCreate) clearDraft("meeting"); onClose(); }}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? "Enregistrement…" : initial?.id ? "Mettre à jour" : "Créer"}
         </button>
@@ -429,25 +464,21 @@ export default function MeetingsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<DraftEntry | null>(null);
   const { showToast } = useToast();
 
-  const load = useCallback(async () => {
-    try {
-      const [mRes, coRes, ctRes, appRes] = await Promise.all([
-        fetch("/api/meetings").then(r => r.json()),
-        fetch("/api/companies").then(r => r.json()),
-        fetch("/api/contacts").then(r => r.json()),
-        fetch("/api/applications").then(r => r.json()),
-      ]);
-      setMeetings(mRes.data ?? []);
-      setCompanies(coRes.data ?? []);
-      setContacts(ctRes.data ?? []);
-      setApplications(appRes.data ?? []);
-    } catch {
-      // keep empty arrays — page shows empty state
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => { setDraft(getDraft("meeting")); }, []);
+
+  // Load each list independently so one failing endpoint never blanks the others
+  // (a single Promise.all that rejects used to wipe all dropdowns on the server).
+  const load = useCallback(() => {
+    fetch("/api/meetings").then(r => r.json())
+      .then(r => setMeetings(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+    fetch("/api/companies").then(r => r.json()).then(r => setCompanies(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    fetch("/api/contacts").then(r => r.json()).then(r => setContacts(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    fetch("/api/applications").then(r => r.json()).then(r => setApplications(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -519,6 +550,14 @@ export default function MeetingsPage() {
           <Plus size={14} /> Nouvelle réunion
         </button>
       </div>
+
+      {draft && (
+        <DraftBanner
+          draft={draft}
+          onResume={() => { setDraft(null); setShowCreate(true); }}
+          onDiscard={() => { clearDraft("meeting"); setDraft(null); }}
+        />
+      )}
 
       {/* Toolbar */}
       <div className="toolbar">
@@ -610,10 +649,11 @@ export default function MeetingsPage() {
       )}
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouvelle réunion" size="lg">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("meeting")), 50); }} title="Nouvelle réunion" size="lg">
         <MeetingForm
+          draftEnabled
           onSubmit={handleCreate}
-          onClose={() => setShowCreate(false)}
+          onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("meeting")), 50); }}
           companies={companies}
           contacts={contacts}
           applications={applications}

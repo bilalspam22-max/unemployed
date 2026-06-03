@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Plus, Globe, MapPin } from "lucide-react";
 import { KanbanBoard } from "@/components/ui/kanban";
 import { StatusBadge, TempDot, Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { KanbanSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/lib/store";
+import { getDraft, clearDraft, saveDraft, type DraftEntry } from "@/lib/drafts";
+import { DraftBanner } from "@/components/ui/draft-banner";
 import type { Company, Sector } from "@/lib/types";
 
 const COLUMNS = [
@@ -44,19 +46,47 @@ function CompanyCard({ company }: { company: Company }) {
   );
 }
 
-function CompanyForm({ sectors, onSubmit, onClose, initial }: {
+function CompanyForm({ sectors, onSubmit, onClose, initial, draftEnabled }: {
   sectors: Sector[];
   onSubmit: (data: Partial<Company>) => Promise<void>;
   onClose: () => void;
   initial?: Partial<Company>;
+  draftEnabled?: boolean;
 }) {
-  const [name, setName] = useState(initial?.name ?? "");
-  const [sectorId, setSectorId] = useState(initial?.sectorId ?? "");
-  const [location, setLocation] = useState(initial?.location ?? "");
-  const [website, setWebsite] = useState(initial?.website ?? "");
-  const [techs, setTechs] = useState((initial?.technologies ?? []).join(", "));
-  const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [saving, setSaving] = useState(false);
+  const isCreate = draftEnabled && !initial?.id;
+  const saved = isCreate ? getDraft("company") : null;
+
+  const [name, setName]         = useState((saved?.data?.name as string) ?? initial?.name ?? "");
+  const [sectorId, setSectorId] = useState((saved?.data?.sectorId as string) ?? initial?.sectorId ?? "");
+  const [location, setLocation] = useState((saved?.data?.location as string) ?? initial?.location ?? "");
+  const [website, setWebsite]   = useState((saved?.data?.website as string) ?? initial?.website ?? "");
+  const [techs, setTechs]       = useState((saved?.data?.techs as string) ?? (initial?.technologies ?? []).join(", "));
+  const [notes, setNotes]       = useState((saved?.data?.notes as string) ?? initial?.notes ?? "");
+  const [saving, setSaving]     = useState(false);
+  const doneRef = useRef(false);
+  const isDirtyRef = useRef(false);
+  const firstRenderRef = useRef(true);
+
+  const data = { name, sectorId, location, website, techs, notes };
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; });
+
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    isDirtyRef.current = true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, sectorId, location, website, techs, notes]);
+  useEffect(() => {
+    if (!isCreate || !isDirtyRef.current) return;
+    const t = setTimeout(() => saveDraft("company", dataRef.current, dataRef.current.name || "Nouvelle entreprise"), 1200);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, sectorId, location, website, techs, notes]);
+  useEffect(() => () => {
+    if (!isCreate || !isDirtyRef.current || doneRef.current) return;
+    saveDraft("company", dataRef.current, dataRef.current.name || "Nouvelle entreprise");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handle(e: React.FormEvent) {
     e.preventDefault();
@@ -67,6 +97,8 @@ function CompanyForm({ sectors, onSubmit, onClose, initial }: {
       technologies: techs.split(",").map(t => t.trim()).filter(Boolean),
       notes: notes || null,
     });
+    doneRef.current = true;
+    if (isCreate) clearDraft("company");
     setSaving(false);
     onClose();
   }
@@ -103,7 +135,7 @@ function CompanyForm({ sectors, onSubmit, onClose, initial }: {
         <textarea className="input" value={notes} onChange={e => setNotes(e.target.value)} rows={3} />
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-        <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        <button type="button" className="btn" onClick={() => { doneRef.current = true; if (isCreate) clearDraft("company"); onClose(); }}>Annuler</button>
         <button type="submit" className="btn btn--primary" disabled={saving}>
           {saving ? "Enregistrement…" : initial ? "Mettre à jour" : "Créer"}
         </button>
@@ -121,6 +153,9 @@ export default function CompaniesPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
+  const [draft, setDraft] = useState<DraftEntry | null>(null);
+
+  useEffect(() => { setDraft(getDraft("company")); }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -183,6 +218,14 @@ export default function CompaniesPage() {
           <Plus size={14} /> Nouvelle entreprise
         </button>
       </div>
+
+      {draft && (
+        <DraftBanner
+          draft={draft}
+          onResume={() => { setDraft(null); setShowCreate(true); }}
+          onDiscard={() => { clearDraft("company"); setDraft(null); }}
+        />
+      )}
 
       {/* Toolbar */}
       <div className="toolbar">
@@ -272,8 +315,8 @@ export default function CompaniesPage() {
       )}
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nouvelle entreprise">
-        <CompanyForm sectors={sectors} onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("company")), 50); }} title="Nouvelle entreprise">
+        <CompanyForm sectors={sectors} draftEnabled onSubmit={handleCreate} onClose={() => { setShowCreate(false); setTimeout(() => setDraft(getDraft("company")), 50); }} />
       </Modal>
 
       <ConfirmDialog

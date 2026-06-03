@@ -3,7 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { requireAuth, ok, err } from "@/lib/api-helpers";
-import { resolveCompanyId } from "@/app/api/contacts/company-resolver";
+import { resolveCompanyId, resolveSectorId } from "@/app/api/contacts/company-resolver";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { session, response } = await requireAuth();
@@ -12,13 +12,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json().catch(() => ({}));
 
   // Extract company-creation fields from body
-  const { companyName, companySectorId, companyLocation, companyWebsite, ...rest } = body;
+  const { companyName, companySectorId, companySectorName, companyLocation, companyWebsite, ...rest } = body;
 
   let finalBody = { ...rest, updatedAt: new Date() };
 
   if (companyName !== undefined) {
+    const resolvedSectorId = await resolveSectorId(session!.user.id, companySectorName, companySectorId);
     const resolvedId = await resolveCompanyId(
-      session!.user.id, companyName, companySectorId, companyLocation, companyWebsite, rest.companyId
+      session!.user.id, companyName, resolvedSectorId, companyLocation, companyWebsite, rest.companyId
     );
     finalBody = { ...finalBody, companyId: resolvedId };
   }
