@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, ChevronRight } from "lucide-react";
+import {
+  DndContext, DragEndEvent, DragStartEvent, DragOverlay,
+  PointerSensor, useSensor, useSensors, useDroppable, useDraggable,
+} from "@dnd-kit/core";
+import { Plus, ChevronRight, GripVertical, Inbox } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/lib/store";
+import { statusLabel } from "@/lib/utils";
 import type { Sector, Company, Application } from "@/lib/types";
 
 const SECTOR_COLORS = [
@@ -16,6 +21,7 @@ function SectorCard({ sector, companies, applications, onEdit }: {
   applications: Application[];
   onEdit: () => void;
 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `sector:${sector.id}` });
   const sectorCompanies  = companies.filter(c => c.sectorId === sector.id);
   const activeCompanies  = sectorCompanies.filter(c => c.status !== "rejected");
   const hotOpportunities = sectorCompanies.filter(c => c.status === "hot_opportunity");
@@ -31,7 +37,7 @@ function SectorCard({ sector, companies, applications, onEdit }: {
   const interviewRate   = sent > 0 ? Math.round((interviews / sent)   * 100) : 0;
 
   return (
-    <div className="sector-card" onClick={onEdit}>
+    <div ref={setNodeRef} className={`sector-card ${isOver ? "is-drop-target" : ""}`} onClick={onEdit}>
       <div className="sector-card__strip" style={{ background: sector.color }} />
       <div className="sector-card__body">
         <div className="row between">
@@ -168,13 +174,68 @@ function SectorForm({ onSubmit, onClose, initial }: {
   );
 }
 
+// ─── Draggable application chip (triage tray) ─────────────────────────────────
+
+function DraggableApp({ app, companyName }: { app: Application; companyName: string | null }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `app:${app.id}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`triage-chip ${isDragging ? "is-dragging" : ""}`}
+      title="Glisse-moi sur un secteur"
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical size={12} className="triage-chip__grip" />
+      <span className="triage-chip__title">{app.jobTitle}</span>
+      {companyName && <span className="muted tiny" style={{ flexShrink: 0 }}>· {companyName}</span>}
+      <span className="triage-chip__status">{statusLabel(app.status)}</span>
+    </div>
+  );
+}
+
+// ─── Triage tray (droppable to un-sort) ───────────────────────────────────────
+
+function TriageTray({ apps, companyMap, hasSectors }: {
+  apps: Application[]; companyMap: Record<string, string>; hasSectors: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: "unsorted" });
+  return (
+    <div ref={setNodeRef} className={`triage-tray ${isOver ? "is-drop-target" : ""}`}>
+      <div className="triage-tray__head">
+        <Inbox size={15} color="var(--warn)" />
+        <span>Candidatures à trier ({apps.length})</span>
+        {hasSectors && apps.length > 0 && (
+          <span className="muted tiny" style={{ marginLeft: "auto", fontWeight: 500 }}>
+            Glisse une candidature sur le secteur qui lui correspond
+          </span>
+        )}
+      </div>
+      {apps.length === 0 ? (
+        <div className="triage-tray__empty">
+          ✓ Toutes tes candidatures sont classées dans un secteur.
+        </div>
+      ) : (
+        <div className="triage-tray__items">
+          {apps.map(a => (
+            <DraggableApp key={a.id} app={a} companyName={a.companyId ? (companyMap[a.companyId] ?? null) : null} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SectorsPage() {
   const [sectors, setSectors]     = useState<Sector[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [editing, setEditing]     = useState<Sector | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [activeApp, setActiveApp] = useState<Application | null>(null);
   const { showToast } = useToast();
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const load = useCallback(() => {
     fetch("/api/sectors").then(r => r.json()).then(r => setSectors(Array.isArray(r.data) ? r.data : [])).catch(() => {});
@@ -211,6 +272,36 @@ export default function SectorsPage() {
     showToast("Secteur supprimé");
   }
 
+  // ── Triage : candidatures sans secteur ──
+  const companyMap = Object.fromEntries(companies.map(c => [c.id, c.name]));
+  const unsortedApps = applications.filter(a => !a.sectorId);
+
+  async function assignSector(appId: string, sectorId: string | null) {
+    setApplications(prev => prev.map(a => a.id === appId ? { ...a, sectorId } : a));
+    const resp = await fetch(`/api/applications/${appId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sectorId }),
+    });
+    if (!resp.ok) { showToast("Erreur lors du tri", "error"); load(); return; }
+    const sectorName = sectorId ? (sectors.find(s => s.id === sectorId)?.name ?? "") : null;
+    showToast(sectorName ? `Classé dans « ${sectorName} » ✓` : "Remis dans les non triées");
+  }
+
+  function handleDragStart(e: DragStartEvent) {
+    const id = String(e.active.id).replace("app:", "");
+    setActiveApp(applications.find(a => a.id === id) ?? null);
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveApp(null);
+    const { active, over } = e;
+    if (!over) return;
+    const appId = String(active.id).replace("app:", "");
+    const overId = String(over.id);
+    if (overId === "unsorted") { assignSector(appId, null); return; }
+    if (overId.startsWith("sector:")) assignSector(appId, overId.replace("sector:", ""));
+  }
+
   return (
     <div className="main__inner">
       <div className="page-head">
@@ -223,16 +314,30 @@ export default function SectorsPage() {
         </button>
       </div>
 
-      <div className="sector-grid">
-        {sectors.map(s => (
-          <SectorCard key={s.id} sector={s} companies={companies} applications={applications} onEdit={() => setEditing(s)} />
-        ))}
-        {sectors.length === 0 && (
-          <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px 0" }} className="muted">
-            Créez votre premier secteur pour organiser votre recherche
-          </div>
-        )}
-      </div>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        {/* ── Bac : candidatures à trier (sans secteur) ── */}
+        <TriageTray apps={unsortedApps} companyMap={companyMap} hasSectors={sectors.length > 0} />
+
+        <div className="sector-grid">
+          {sectors.map(s => (
+            <SectorCard key={s.id} sector={s} companies={companies} applications={applications} onEdit={() => setEditing(s)} />
+          ))}
+          {sectors.length === 0 && (
+            <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px 0" }} className="muted">
+              Créez votre premier secteur pour organiser votre recherche
+            </div>
+          )}
+        </div>
+
+        <DragOverlay>
+          {activeApp ? (
+            <div className="triage-chip" style={{ boxShadow: "var(--sh-3)", opacity: 0.95 }}>
+              <GripVertical size={12} className="triage-chip__grip" />
+              <span className="triage-chip__title">{activeApp.jobTitle}</span>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Edit Modal */}
       {editing && (

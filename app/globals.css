@@ -938,7 +938,75 @@ input, textarea, select { font: inherit; color: inherit; }
   position: relative;
 }
 .sector-card:hover { transform: translateY(-2px); box-shadow: var(--sh-card-hover); }
+.sector-card.is-drop-target {
+  outline: 2px dashed var(--primary);
+  outline-offset: 2px;
+  box-shadow: var(--sh-card-hover);
+}
+.sector-card.is-drop-target::after {
+  content: "Déposer ici";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: var(--r-lg);
+  pointer-events: none;
+}
 .sector-card__strip { height: 6px; }
+
+/* ── Triage tray (candidatures à trier) ── */
+.triage-tray {
+  background: var(--warn-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  transition: outline .15s ease;
+}
+.triage-tray.is-drop-target { outline: 2px dashed var(--warn); outline-offset: -3px; }
+.triage-tray__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--warn);
+  margin-bottom: 10px;
+}
+.triage-tray__empty { font-size: 12.5px; color: var(--muted); font-style: italic; }
+.triage-tray__items { display: flex; flex-wrap: wrap; gap: 8px; }
+.triage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--success);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  cursor: grab;
+  user-select: none;
+  max-width: 320px;
+  transition: box-shadow .15s ease;
+}
+.triage-chip:hover { box-shadow: var(--sh-1); }
+.triage-chip:active { cursor: grabbing; }
+.triage-chip.is-dragging { opacity: 0.4; }
+.triage-chip__grip { color: var(--ink-3); flex-shrink: 0; }
+.triage-chip__title {
+  font-size: 12.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.triage-chip__status {
+  flex-shrink: 0;
+  font-size: 10px; font-weight: 700;
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-3);
+}
 .sector-card__body { padding: 18px 20px 16px 20px; }
 .sector-card__title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
 .sector-card__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
