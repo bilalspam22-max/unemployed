@@ -130,23 +130,29 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
   async function handle(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await onSubmit({
-      ...d,
-      companyId: d.companyId || null,
-      contactId: d.contactId || null,
-      applicationId: d.applicationId || null,
-      companyInfo: d.companyInfo || null,
-      myPitch: d.myPitch || null,
-      jobMentioned: d.jobMentioned || null,
-      sentimentNotes: d.sentimentNotes || null,
-      nextSteps: d.nextSteps || null,
-      notes: d.notes || null,
-      questionsData: questions,
-    });
-    doneRef.current = true;
-    if (isCreate) clearDraft("meeting");
-    setSaving(false);
-    onClose();
+    try {
+      await onSubmit({
+        ...d,
+        companyId: d.companyId || null,
+        contactId: d.contactId || null,
+        applicationId: d.applicationId || null,
+        companyInfo: d.companyInfo || null,
+        myPitch: d.myPitch || null,
+        jobMentioned: d.jobMentioned || null,
+        sentimentNotes: d.sentimentNotes || null,
+        nextSteps: d.nextSteps || null,
+        notes: d.notes || null,
+        questionsData: questions,
+      });
+      doneRef.current = true;
+      if (isCreate) clearDraft("meeting");
+      onClose();
+    } catch {
+      // L'erreur est déjà signalée par un toast dans le handler ;
+      // on garde le formulaire ouvert pour ne pas perdre la saisie.
+    } finally {
+      setSaving(false); // ne reste JAMAIS bloqué sur « Enregistrement… »
+    }
   }
 
   const SectionHeader = ({ id, icon: Icon, label }: { id: string; icon: React.ElementType; label: string }) => (
@@ -483,25 +489,39 @@ export default function MeetingsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Fetch with a 15s timeout so a stuck request never hangs the form forever.
+  async function postJson(url: string, method: string, data: unknown): Promise<{ data?: Meeting; error?: string } | null> {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const resp = await fetch(url, {
+        method, headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data), signal: ctrl.signal,
+      });
+      const json = await resp.json().catch(() => null);
+      if (!resp.ok) return { error: json?.error ?? `Erreur ${resp.status}` };
+      return json;
+    } catch (e) {
+      const aborted = e instanceof DOMException && e.name === "AbortError";
+      return { error: aborted ? "La requête a expiré (serveur trop lent)." : "Échec réseau." };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function handleCreate(data: Partial<Meeting>) {
-    const resp = await fetch("/api/meetings", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const { data: created } = await resp.json();
-    setMeetings(prev => [created, ...prev]);
+    const json = await postJson("/api/meetings", "POST", data);
+    if (!json?.data) { showToast(json?.error ?? "Erreur lors de la création", "error"); throw new Error("create failed"); }
+    setMeetings(prev => [json.data!, ...prev]);
     showToast("Réunion créée ✓");
   }
 
   async function handleUpdate(data: Partial<Meeting>) {
     if (!selected) return;
-    const resp = await fetch(`/api/meetings/${selected.id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const { data: updated } = await resp.json();
-    setMeetings(prev => prev.map(m => m.id === updated.id ? updated : m));
-    setSelected(updated);
+    const json = await postJson(`/api/meetings/${selected.id}`, "PUT", data);
+    if (!json?.data) { showToast(json?.error ?? "Erreur lors de la mise à jour", "error"); throw new Error("update failed"); }
+    setMeetings(prev => prev.map(m => m.id === json.data!.id ? json.data! : m));
+    setSelected(json.data!);
     setShowEdit(false);
     showToast("Réunion mise à jour ✓");
   }
