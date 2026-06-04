@@ -202,6 +202,7 @@ export const meetings = sqliteTable("meeting", {
   sentiment:       text("sentiment", { enum: ["positive", "neutral", "negative"] }).default("neutral"),
   sentimentNotes:  text("sentimentNotes"),
   questionsData:   text("questionsData").default("[]"), // JSON: [{question, asked, answer}]
+  clientInfo:      text("clientInfo"),      // Infos sur le client final mentionné en réunion
   nextSteps:       text("nextSteps"),
   notes:           text("notes"),
   createdAt:       integer("createdAt", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),

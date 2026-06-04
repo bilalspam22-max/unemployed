@@ -24,6 +24,7 @@ const createSchema = z.object({
   sentiment:      z.enum(["positive", "neutral", "negative"]).optional(),
   sentimentNotes: z.string().nullable().optional(),
   questionsData:  z.array(questionItemSchema).optional(),
+  clientInfo:     z.string().nullable().optional(),
   nextSteps:      z.string().nullable().optional(),
   notes:          z.string().nullable().optional(),
 });
@@ -31,13 +32,18 @@ const createSchema = z.object({
 export async function GET() {
   const { session, response } = await requireAuth();
   if (response) return response;
-  const rows = await db.select().from(meetings)
-    .where(eq(meetings.userId, session!.user.id))
-    .orderBy(desc(meetings.date));
-  return ok(rows.map(r => ({
-    ...r,
-    questionsData: JSON.parse(r.questionsData ?? "[]"),
-  })));
+  try {
+    const rows = await db.select().from(meetings)
+      .where(eq(meetings.userId, session!.user.id))
+      .orderBy(desc(meetings.date));
+    return ok(rows.map(r => ({
+      ...r,
+      questionsData: JSON.parse(r.questionsData ?? "[]"),
+    })));
+  } catch (e) {
+    console.error("[/api/meetings GET]", e);
+    return err(e instanceof Error ? e.message : "Erreur de chargement des réunions", 500);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -46,12 +52,17 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.message);
-  const { questionsData, ...rest } = parsed.data;
-  const row = await db.insert(meetings).values({
-    id:             generateId(),
-    userId:         session!.user.id,
-    questionsData:  JSON.stringify(questionsData ?? []),
-    ...rest,
-  }).returning();
-  return ok({ ...row[0], questionsData: JSON.parse(row[0].questionsData ?? "[]") }, 201);
+  try {
+    const { questionsData, ...rest } = parsed.data;
+    const row = await db.insert(meetings).values({
+      id:             generateId(),
+      userId:         session!.user.id,
+      questionsData:  JSON.stringify(questionsData ?? []),
+      ...rest,
+    }).returning();
+    return ok({ ...row[0], questionsData: JSON.parse(row[0].questionsData ?? "[]") }, 201);
+  } catch (e) {
+    console.error("[/api/meetings POST]", e);
+    return err(e instanceof Error ? e.message : "Erreur lors de l'enregistrement", 500);
+  }
 }

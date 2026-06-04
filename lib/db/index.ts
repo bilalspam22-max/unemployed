@@ -26,6 +26,20 @@ function ensureColumns() {
     { table: "followup",    column: "myMessage",            ddl: "ALTER TABLE followup ADD COLUMN myMessage text" },
     { table: "followup",    column: "interlocutorResponse", ddl: "ALTER TABLE followup ADD COLUMN interlocutorResponse text" },
     { table: "contact",     column: "phone",                ddl: "ALTER TABLE contact ADD COLUMN phone text" },
+    // Meeting table was created outside the migrations → older self-hosted DBs
+    // may miss these columns, which caused INSERT to 500. Self-heal them all.
+    { table: "meeting",     column: "companyId",      ddl: "ALTER TABLE meeting ADD COLUMN companyId text" },
+    { table: "meeting",     column: "contactId",      ddl: "ALTER TABLE meeting ADD COLUMN contactId text" },
+    { table: "meeting",     column: "applicationId",  ddl: "ALTER TABLE meeting ADD COLUMN applicationId text" },
+    { table: "meeting",     column: "companyInfo",    ddl: "ALTER TABLE meeting ADD COLUMN companyInfo text" },
+    { table: "meeting",     column: "myPitch",        ddl: "ALTER TABLE meeting ADD COLUMN myPitch text" },
+    { table: "meeting",     column: "jobMentioned",   ddl: "ALTER TABLE meeting ADD COLUMN jobMentioned text" },
+    { table: "meeting",     column: "sentiment",      ddl: "ALTER TABLE meeting ADD COLUMN sentiment text DEFAULT 'neutral'" },
+    { table: "meeting",     column: "sentimentNotes", ddl: "ALTER TABLE meeting ADD COLUMN sentimentNotes text" },
+    { table: "meeting",     column: "questionsData",  ddl: "ALTER TABLE meeting ADD COLUMN questionsData text DEFAULT '[]'" },
+    { table: "meeting",     column: "nextSteps",      ddl: "ALTER TABLE meeting ADD COLUMN nextSteps text" },
+    { table: "meeting",     column: "notes",          ddl: "ALTER TABLE meeting ADD COLUMN notes text" },
+    { table: "meeting",     column: "clientInfo",     ddl: "ALTER TABLE meeting ADD COLUMN clientInfo text" },
   ];
   for (const { table, column, ddl } of additive) {
     try {
@@ -53,6 +67,26 @@ function ensureTables() {
       size integer DEFAULT 0 NOT NULL,
       data blob NOT NULL,
       createdAt integer DEFAULT (unixepoch()) NOT NULL
+    )`);
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS meeting (
+      id text PRIMARY KEY NOT NULL,
+      userId text NOT NULL,
+      companyId text,
+      contactId text,
+      applicationId text,
+      title text NOT NULL,
+      date text NOT NULL,
+      companyInfo text,
+      myPitch text,
+      jobMentioned text,
+      sentiment text DEFAULT 'neutral',
+      sentimentNotes text,
+      questionsData text DEFAULT '[]',
+      nextSteps text,
+      notes text,
+      clientInfo text,
+      createdAt integer DEFAULT (unixepoch()) NOT NULL,
+      updatedAt integer DEFAULT (unixepoch()) NOT NULL
     )`);
   } catch (e) {
     console.error("[db] ensureTables failed:", e);

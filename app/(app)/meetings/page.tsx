@@ -69,6 +69,7 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
       jobMentioned:  initial?.jobMentioned ?? "",
       sentiment:     initial?.sentiment ?? "neutral",
       sentimentNotes: initial?.sentimentNotes ?? "",
+      clientInfo:    initial?.clientInfo ?? "",
       nextSteps:     initial?.nextSteps ?? "",
       notes:         initial?.notes ?? "",
     };
@@ -114,6 +115,9 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
   function updateAnswer(idx: number, answer: string) {
     setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, answer } : q));
   }
+  function updateQuestion(idx: number, question: string) {
+    setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, question } : q));
+  }
   function addCustomQuestion() {
     if (!customQ.trim()) return;
     setQuestions(prev => [...prev, { question: customQ.trim(), asked: false, answer: "" }]);
@@ -140,6 +144,7 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
         myPitch: d.myPitch || null,
         jobMentioned: d.jobMentioned || null,
         sentimentNotes: d.sentimentNotes || null,
+        clientInfo: d.clientInfo || null,
         nextSteps: d.nextSteps || null,
         notes: d.notes || null,
         questionsData: questions,
@@ -238,6 +243,15 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
         </div>
       )}
 
+      {/* Client info */}
+      <SectionHeader id="client" icon={User} label="Infos client" />
+      {expandedSection === "client" && (
+        <div className="field" style={{ paddingBottom: 8 }}>
+          <textarea className="input" value={d.clientInfo} onChange={e => up("clientInfo", e.target.value)}
+            rows={3} placeholder="Le client final mentionné : nom, secteur, besoin, contexte, contact…" />
+        </div>
+      )}
+
       {/* Sentiment */}
       <SectionHeader id="sentiment" icon={Smile} label="Sentiment / Feeling" />
       {expandedSection === "sentiment" && (
@@ -289,10 +303,18 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
                     type="checkbox"
                     checked={q.asked}
                     onChange={() => toggleQuestion(i)}
-                    style={{ accentColor: "var(--success)", cursor: "pointer" }}
+                    style={{ accentColor: "var(--success)", cursor: "pointer", flexShrink: 0 }}
                   />
-                  <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500 }}>{q.question}</span>
-                  <button type="button" onClick={() => removeQuestion(i)} className="btn btn--ghost btn--icon" style={{ opacity: 0.5 }}>
+                  <input
+                    className="input"
+                    value={q.question}
+                    onChange={e => updateQuestion(i, e.target.value)}
+                    placeholder="Question…"
+                    style={{ flex: 1, fontSize: 12.5, fontWeight: 500, padding: "4px 8px", height: "auto", background: "transparent", border: "1px solid transparent" }}
+                    onFocus={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--surface)"; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                  />
+                  <button type="button" onClick={() => removeQuestion(i)} className="btn btn--ghost btn--icon" style={{ opacity: 0.5, flexShrink: 0 }}>
                     <Trash2 size={12} />
                   </button>
                 </div>
@@ -399,6 +421,16 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
           <div className="section-title"><Briefcase size={13} style={{ display: "inline", marginRight: 4 }} /> Offres d&apos;emploi mentionnées</div>
           <div className="card" style={{ padding: 12, background: "var(--warn-soft)", fontSize: 13, whiteSpace: "pre-wrap" }}>
             {meeting.jobMentioned}
+          </div>
+        </div>
+      )}
+
+      {/* Client info */}
+      {meeting.clientInfo && (
+        <div>
+          <div className="section-title"><User size={13} style={{ display: "inline", marginRight: 4 }} /> Infos client</div>
+          <div className="card" style={{ padding: 12, background: "var(--surface-2)", fontSize: 13, whiteSpace: "pre-wrap" }}>
+            {meeting.clientInfo}
           </div>
         </div>
       )}

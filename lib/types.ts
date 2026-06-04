@@ -186,6 +186,7 @@ export interface Meeting {
   sentiment: MeetingSentiment | null;
   sentimentNotes: string | null;
   questionsData: QuestionItem[];
+  clientInfo?: string | null;
   nextSteps: string | null;
   notes: string | null;
   createdAt: Date | null;

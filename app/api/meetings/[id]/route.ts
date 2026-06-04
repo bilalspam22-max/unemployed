@@ -9,17 +9,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (response) return response;
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  // Serialize questionsData if present
-  const toSet = { ...body, updatedAt: new Date() };
-  if (Array.isArray(body.questionsData)) {
-    toSet.questionsData = JSON.stringify(body.questionsData);
+  try {
+    // Serialize questionsData if present
+    const toSet = { ...body, updatedAt: new Date() };
+    if (Array.isArray(body.questionsData)) {
+      toSet.questionsData = JSON.stringify(body.questionsData);
+    }
+    const row = await db.update(meetings)
+      .set(toSet)
+      .where(and(eq(meetings.id, id), eq(meetings.userId, session!.user.id)))
+      .returning();
+    if (!row.length) return err("Not found", 404);
+    return ok({ ...row[0], questionsData: JSON.parse(row[0].questionsData ?? "[]") });
+  } catch (e) {
+    console.error("[/api/meetings PUT]", e);
+    return err(e instanceof Error ? e.message : "Erreur lors de la mise à jour", 500);
   }
-  const row = await db.update(meetings)
-    .set(toSet)
-    .where(and(eq(meetings.id, id), eq(meetings.userId, session!.user.id)))
-    .returning();
-  if (!row.length) return err("Not found", 404);
-  return ok({ ...row[0], questionsData: JSON.parse(row[0].questionsData ?? "[]") });
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
