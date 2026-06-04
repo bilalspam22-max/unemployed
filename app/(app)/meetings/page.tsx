@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import {
   Plus, CalendarCheck, Search, ChevronDown, ChevronUp,
   Building2, User, Briefcase, Smile, Meh, Frown,
   MessageSquare, ClipboardList, ArrowRight, Trash2,
+  Copy, Download,
 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
-import { Drawer } from "@/components/ui/drawer";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ListSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -375,114 +375,123 @@ function MeetingForm({ onSubmit, onClose, initial, companies, contacts, applicat
 
 // ─── Meeting Detail ─────────────────────────────────────────────────────────
 
-function MeetingDetail({ meeting }: { meeting: Meeting }) {
+// One content block of the report: icon + title + body, with a colored left accent.
+function ReportSection({ icon: Icon, label, accent, children }: {
+  icon: React.ElementType; label: string; accent: string; children: ReactNode;
+}) {
+  return (
+    <section className="mtg-section" style={{ borderLeftColor: accent }}>
+      <div className="mtg-section__title">
+        <Icon size={13} color={accent} /> {label}
+      </div>
+      <div className="mtg-section__body">{children}</div>
+    </section>
+  );
+}
+
+function MeetingDetail({ meeting, companyName, contactName, applicationName }: {
+  meeting: Meeting;
+  companyName?: string | null;
+  contactName?: string | null;
+  applicationName?: string | null;
+}) {
   const sentimentCfg = meeting.sentiment ? SENTIMENT_CFG[meeting.sentiment] : null;
   const SentimentIcon = sentimentCfg?.icon ?? Meh;
+  const qs = meeting.questionsData ?? [];
+  const askedCount = qs.filter(q => q.asked).length;
+
+  const meta: Array<{ icon: React.ElementType; label: string; value: string }> = [];
+  if (companyName)     meta.push({ icon: Building2, label: "Entreprise",  value: companyName });
+  if (contactName)     meta.push({ icon: User,      label: "Contact",     value: contactName });
+  if (applicationName) meta.push({ icon: Briefcase, label: "Candidature", value: applicationName });
 
   return (
-    <div className="col gap-4">
-      {/* Date + Sentiment */}
-      <div className="row gap-3">
-        <Badge tone="info">{formatDate(meeting.date)}</Badge>
-        {sentimentCfg && (
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 4,
-            fontSize: 12, fontWeight: 600, color: sentimentCfg.color,
-            background: sentimentCfg.bg, padding: "3px 10px", borderRadius: "var(--r-full)",
-          }}>
-            <SentimentIcon size={13} /> {sentimentCfg.label}
-          </span>
+    <div className="mtg-detail">
+      {/* En-tête : date + ressenti + métadonnées */}
+      <div className="mtg-header">
+        <div className="row gap-2" style={{ flexWrap: "wrap", alignItems: "center" }}>
+          <Badge tone="info">{formatDate(meeting.date)}</Badge>
+          {sentimentCfg && (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 12, fontWeight: 700, color: sentimentCfg.color,
+              background: sentimentCfg.bg, padding: "3px 10px", borderRadius: "var(--r-full)",
+            }}>
+              <SentimentIcon size={13} /> {sentimentCfg.label}
+            </span>
+          )}
+          {qs.length > 0 && (
+            <span className="badge badge--neutral">{askedCount}/{qs.length} questions posées</span>
+          )}
+        </div>
+        {meta.length > 0 && (
+          <div className="mtg-meta">
+            {meta.map((m, i) => (
+              <div key={i} className="mtg-meta__item">
+                <m.icon size={13} className="mtg-meta__icon" />
+                <div>
+                  <div className="mtg-meta__label">{m.label}</div>
+                  <div className="mtg-meta__value">{m.value}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Company info */}
       {meeting.companyInfo && (
-        <div>
-          <div className="section-title"><Building2 size={13} style={{ display: "inline", marginRight: 4 }} /> Infos entreprise</div>
-          <div className="card" style={{ padding: 12, background: "var(--surface-2)", fontSize: 13, whiteSpace: "pre-wrap" }}>
-            {meeting.companyInfo}
-          </div>
-        </div>
+        <ReportSection icon={Building2} label="Infos entreprise reçues" accent="var(--info)">
+          {meeting.companyInfo}
+        </ReportSection>
       )}
-
-      {/* Pitch */}
       {meeting.myPitch && (
-        <div>
-          <div className="section-title"><MessageSquare size={13} style={{ display: "inline", marginRight: 4 }} /> Mon pitch</div>
-          <div className="card" style={{ padding: 12, background: "var(--primary-soft)", fontSize: 13, whiteSpace: "pre-wrap" }}>
-            {meeting.myPitch}
-          </div>
-        </div>
+        <ReportSection icon={MessageSquare} label="Mon pitch de présentation" accent="var(--primary)">
+          {meeting.myPitch}
+        </ReportSection>
       )}
-
-      {/* Job mentioned */}
       {meeting.jobMentioned && (
-        <div>
-          <div className="section-title"><Briefcase size={13} style={{ display: "inline", marginRight: 4 }} /> Offres d&apos;emploi mentionnées</div>
-          <div className="card" style={{ padding: 12, background: "var(--warn-soft)", fontSize: 13, whiteSpace: "pre-wrap" }}>
-            {meeting.jobMentioned}
-          </div>
-        </div>
+        <ReportSection icon={Briefcase} label="Offres d'emploi mentionnées" accent="var(--warn)">
+          {meeting.jobMentioned}
+        </ReportSection>
       )}
-
-      {/* Client info */}
       {meeting.clientInfo && (
-        <div>
-          <div className="section-title"><User size={13} style={{ display: "inline", marginRight: 4 }} /> Infos client</div>
-          <div className="card" style={{ padding: 12, background: "var(--surface-2)", fontSize: 13, whiteSpace: "pre-wrap" }}>
-            {meeting.clientInfo}
-          </div>
-        </div>
+        <ReportSection icon={User} label="Infos client" accent="var(--plum)">
+          {meeting.clientInfo}
+        </ReportSection>
       )}
-
-      {/* Sentiment notes */}
       {meeting.sentimentNotes && (
-        <div>
-          <div className="section-title"><Smile size={13} style={{ display: "inline", marginRight: 4 }} /> Notes sentiment</div>
-          <div style={{ fontSize: 13, color: "var(--muted)" }}>{meeting.sentimentNotes}</div>
-        </div>
+        <ReportSection icon={Smile} label="Notes sur le ressenti" accent={sentimentCfg?.color ?? "var(--muted)"}>
+          {meeting.sentimentNotes}
+        </ReportSection>
       )}
 
-      {/* Questions & Answers */}
-      {meeting.questionsData?.length > 0 && (
-        <div>
-          <div className="section-title"><ClipboardList size={13} style={{ display: "inline", marginRight: 4 }} /> Questions &amp; Réponses</div>
-          <div className="col gap-2">
-            {meeting.questionsData.map((q, i) => (
-              <div key={i} style={{
-                padding: "8px 12px", borderRadius: "var(--r-md)", fontSize: 12.5,
-                background: q.asked ? "var(--success-soft)" : "var(--surface-2)",
-                border: "1px solid", borderColor: q.asked ? "var(--success)" : "var(--border)",
-                opacity: q.asked ? 1 : 0.6,
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: q.answer ? 4 : 0 }}>
-                  {q.asked ? "✅" : "⬜"} {q.question}
+      {qs.length > 0 && (
+        <ReportSection icon={ClipboardList} label="Questions & réponses" accent="var(--success)">
+          <div className="mtg-qa">
+            {qs.map((q, i) => (
+              <div key={i} className={`mtg-qa__item ${q.asked ? "is-asked" : ""}`}>
+                <div className="mtg-qa__q">
+                  <span className="mtg-qa__check">{q.asked ? "✓" : "○"}</span>
+                  <span>{q.question}</span>
                 </div>
-                {q.answer && (
-                  <div style={{ color: "var(--muted)", paddingLeft: 20, whiteSpace: "pre-wrap" }}>{q.answer}</div>
+                {q.answer && q.answer.trim() && (
+                  <div className="mtg-qa__a">{q.answer}</div>
                 )}
               </div>
             ))}
           </div>
-        </div>
+        </ReportSection>
       )}
 
-      {/* Next steps */}
       {meeting.nextSteps && (
-        <div>
-          <div className="section-title"><ArrowRight size={13} style={{ display: "inline", marginRight: 4 }} /> Prochaines étapes</div>
-          <div className="card" style={{ padding: 12, background: "var(--primary-soft)", fontSize: 13, whiteSpace: "pre-wrap" }}>
-            {meeting.nextSteps}
-          </div>
-        </div>
+        <ReportSection icon={ArrowRight} label="Prochaines étapes" accent="var(--primary)">
+          {meeting.nextSteps}
+        </ReportSection>
       )}
-
-      {/* Free notes */}
       {meeting.notes && (
-        <div>
-          <div className="section-title">Notes libres</div>
-          <div style={{ fontSize: 13, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{meeting.notes}</div>
-        </div>
+        <ReportSection icon={MessageSquare} label="Notes libres" accent="var(--border-strong)">
+          {meeting.notes}
+        </ReportSection>
       )}
     </div>
   );
@@ -576,6 +585,71 @@ export default function MeetingsPage() {
     if (!id) return null;
     const c = contacts.find(c => c.id === id);
     return c ? `${c.firstName} ${c.lastName}` : null;
+  }
+
+  // ── Export du compte rendu (texte/markdown, pour ChatGPT, etc.) ──
+  function buildMeetingExport(m: Meeting): string {
+    const company = getCompanyName(m.companyId);
+    const contact = getContactName(m.contactId);
+    const appName = m.applicationId ? (applications.find(a => a.id === m.applicationId)?.jobTitle ?? null) : null;
+    const sentimentLabel = m.sentiment ? (SENTIMENT_CFG[m.sentiment]?.label ?? m.sentiment) : null;
+
+    const out: string[] = [];
+    out.push(`# Compte rendu de réunion — ${m.title}`);
+    out.push("");
+    out.push(`Date : ${formatDate(m.date)}`);
+    if (company) out.push(`Entreprise : ${company}`);
+    if (contact) out.push(`Contact : ${contact}`);
+    if (appName) out.push(`Candidature liée : ${appName}`);
+    if (sentimentLabel) out.push(`Ressenti : ${sentimentLabel}`);
+    out.push("");
+
+    const sec = (title: string, content: string | null | undefined) => {
+      if (content && content.trim()) { out.push(`## ${title}`); out.push(content.trim()); out.push(""); }
+    };
+    sec("Infos entreprise reçues", m.companyInfo);
+    sec("Mon pitch de présentation", m.myPitch);
+    sec("Offres d'emploi mentionnées", m.jobMentioned);
+    sec("Infos client", m.clientInfo);
+
+    const qs = m.questionsData ?? [];
+    if (qs.some(q => q.asked || (q.answer && q.answer.trim()))) {
+      out.push("## Questions & réponses");
+      for (const q of qs) {
+        out.push(`- ${q.asked ? "[posée]" : "[non posée]"} ${q.question}`);
+        if (q.answer && q.answer.trim()) out.push(`  → ${q.answer.trim()}`);
+      }
+      out.push("");
+    }
+
+    sec("Notes sur le ressenti", m.sentimentNotes);
+    sec("Prochaines étapes", m.nextSteps);
+    sec("Notes libres", m.notes);
+    return out.join("\n").trim() + "\n";
+  }
+
+  async function copyMeetingExport(m: Meeting) {
+    try {
+      await navigator.clipboard.writeText(buildMeetingExport(m));
+      showToast("Compte rendu copié ✓");
+    } catch {
+      showToast("Impossible de copier", "error");
+    }
+  }
+
+  function downloadMeetingExport(m: Meeting) {
+    const text = buildMeetingExport(m);
+    const slug = (m.title || "reunion").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
+    const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `compte-rendu-${slug}-${m.date}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("Compte rendu téléchargé ✓");
   }
 
   const filtered = meetings.filter(m => {
@@ -682,13 +756,13 @@ export default function MeetingsPage() {
         </div>
       )}
 
-      {/* Detail Drawer */}
+      {/* Detail Modal (large, redimensionnable) */}
       {selected && !showEdit && (
-        <Drawer
+        <Modal
           open={true}
           onClose={() => setSelected(null)}
           title={selected.title}
-          subtitle={`${formatDate(selected.date)}${getCompanyName(selected.companyId) ? ` · ${getCompanyName(selected.companyId)}` : ""}`}
+          size="lg"
           footer={
             <>
               <button className="btn" style={{ color: "var(--danger)" }} onClick={() => setConfirmDelete(true)}>Supprimer</button>
@@ -696,8 +770,27 @@ export default function MeetingsPage() {
             </>
           }
         >
-          <MeetingDetail meeting={selected} />
-        </Drawer>
+          {/* Export du compte rendu */}
+          <div className="mtg-export">
+            <div className="mtg-export__label">
+              Exporter le compte rendu <span className="muted tiny">(à coller dans ChatGPT pour générer un PV)</span>
+            </div>
+            <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+              <button className="btn btn--sm btn--primary" onClick={() => copyMeetingExport(selected)}>
+                <Copy size={13} /> Copier
+              </button>
+              <button className="btn btn--sm" onClick={() => downloadMeetingExport(selected)}>
+                <Download size={13} /> Télécharger (.md)
+              </button>
+            </div>
+          </div>
+          <MeetingDetail
+            meeting={selected}
+            companyName={getCompanyName(selected.companyId)}
+            contactName={getContactName(selected.contactId)}
+            applicationName={selected.applicationId ? (applications.find(a => a.id === selected.applicationId)?.jobTitle ?? null) : null}
+          />
+        </Modal>
       )}
 
       {/* Create Modal */}
