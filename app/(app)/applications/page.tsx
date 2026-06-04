@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Calendar, ExternalLink } from "lucide-react";
+import { Plus, Calendar, ExternalLink, Filter, X } from "lucide-react";
 import { KanbanBoard } from "@/components/ui/kanban";
 import { StatusBadge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/drawer";
@@ -268,6 +268,13 @@ export default function ApplicationsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<DraftEntry | null>(null);
+  // ── Filtres ──
+  const [fSearch, setFSearch]   = useState("");
+  const [fCompany, setFCompany] = useState("");
+  const [fSector, setFSector]   = useState("");
+  const [fFrom, setFFrom]       = useState("");
+  const [fTo, setFTo]           = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => { setDraft(getDraft("application")); }, []);
@@ -351,6 +358,22 @@ export default function ApplicationsPage() {
 
   const companyMap = Object.fromEntries(companies.map(c => [c.id, c]));
 
+  // ── Application des filtres ──
+  const s = fSearch.trim().toLowerCase();
+  const filteredApps = apps.filter(a => {
+    if (fCompany && a.companyId !== fCompany) return false;
+    if (fSector && a.sectorId !== fSector) return false;
+    if (s) {
+      const company = a.companyId ? (companyMap[a.companyId]?.name ?? "") : "";
+      if (!`${a.jobTitle} ${company}`.toLowerCase().includes(s)) return false;
+    }
+    if (fFrom && (!a.sentDate || a.sentDate.slice(0, 10) < fFrom)) return false;
+    if (fTo && (!a.sentDate || a.sentDate.slice(0, 10) > fTo)) return false;
+    return true;
+  });
+  const activeFilters = !!(fSearch || fCompany || fSector || fFrom || fTo);
+  function resetFilters() { setFSearch(""); setFCompany(""); setFSector(""); setFFrom(""); setFTo(""); }
+
   function openPrefilled(p: AppPrefill) {
     setPrefill(p);
     setShowCreate(true);
@@ -365,12 +388,58 @@ export default function ApplicationsPage() {
       <div className="page-head">
         <div>
           <h1 className="page-head__title">Candidatures</h1>
-          <p className="page-head__sub">{apps.length} candidatures suivies</p>
+          <p className="page-head__sub">
+            {activeFilters ? `${filteredApps.length} / ${apps.length}` : apps.length} candidature{apps.length !== 1 ? "s" : ""} {activeFilters ? "filtrées" : "suivies"}
+          </p>
         </div>
         <button className="btn btn--primary" onClick={() => { setPrefill(null); setShowCreate(true); }}>
           <Plus size={14} /> Nouvelle candidature
         </button>
       </div>
+
+      {/* ── Barre de filtres ── */}
+      <div className="toolbar" style={{ flexWrap: "wrap" }}>
+        <div className="search" style={{ flex: "1 1 220px" }}>
+          <input placeholder="Rechercher (poste, société)…" value={fSearch} onChange={e => setFSearch(e.target.value)} />
+        </div>
+        <button className={`chip ${showFilters || activeFilters ? "chip--active" : ""}`} onClick={() => setShowFilters(v => !v)}>
+          <Filter size={13} /> Filtres{activeFilters ? " ●" : ""}
+        </button>
+        {activeFilters && (
+          <button className="chip" onClick={resetFilters}><X size={13} /> Réinitialiser</button>
+        )}
+      </div>
+
+      {(showFilters || activeFilters) && (
+        <div className="card card__pad" style={{ marginBottom: 16 }}>
+          <div className="form-grid">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">Société</label>
+              <select className="input" value={fCompany} onChange={e => setFCompany(e.target.value)}>
+                <option value="">— Toutes —</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">Secteur</label>
+              <select className="input" value={fSector} onChange={e => setFSector(e.target.value)}>
+                <option value="">— Tous —</option>
+                {sectors.map(s2 => <option key={s2.id} value={s2.id}>{s2.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-grid" style={{ marginBottom: 0 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">Envoyée du</label>
+              <input className="input" type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">au</label>
+              <input className="input" type="date" value={fTo} onChange={e => setFTo(e.target.value)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {draft && (
         <DraftBanner
@@ -384,7 +453,7 @@ export default function ApplicationsPage() {
         <KanbanSkeleton columns={8} cardsPerCol={2} />
       ) : (
         <KanbanBoard
-          items={apps}
+          items={filteredApps}
           columns={COLUMNS}
           onStatusChange={handleStatusChange}
           renderCard={(app) => (

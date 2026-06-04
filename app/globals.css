@@ -2712,6 +2712,7 @@ body { font-variant-numeric: tabular-nums; }
     transform: none !important;
     width: 100% !important;
     max-width: 100% !important;
+    height: auto !important;
     max-height: 92vh !important;
     border-radius: 20px 20px 0 0 !important;
     animation: modalSlideUp 0.24s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -2719,7 +2720,26 @@ body { font-variant-numeric: tabular-nums; }
   .modal-wrapper__handle {
     display: block !important;
   }
+  /* Resize + maximize make no sense on the mobile bottom-sheet */
+  .modal-wrapper__resize,
+  .modal-wrapper__maximize { display: none !important; }
 }
+
+/* Drag-to-resize handle (desktop) */
+.modal-wrapper__resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 3;
+  opacity: 0.45;
+  background:
+    linear-gradient(135deg, transparent 0 42%, var(--border-strong) 42% 52%, transparent 52% 64%, var(--border-strong) 64% 74%, transparent 74%);
+  border-bottom-right-radius: var(--r-xl);
+}
+.modal-wrapper__resize:hover { opacity: 0.9; }
 @keyframes modalSlideUp {
   from { transform: translateY(100%); opacity: 0.5; }
   to   { transform: translateY(0); opacity: 1; }
